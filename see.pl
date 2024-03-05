@@ -21,51 +21,22 @@
 :- use_module(library(pcre)).
 :- catch(use_module(library(http/http_open)), _, true).
 
-version_info('SEE v0.0.1 (2024-03-03)').
+version_info('SEE v..1 (2024-03-05)').
 
-license_info('MIT License
-
-Copyright (c) 2024-2024 Jos De Roo
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.').
-
-help_info('Usage: eye <options>* <data>*
-eye
+help_info('Usage: see <options>* <data>*
+see
     swipl -g main see.pl --
 <options>
-    --debug                         output debug info on stderr
     --help                          show help info
-    --license                       show license info
     --output <file>                 write reasoner output to <file>
-    --quiet                         quiet mode
-    --rdf-list-output               output lists as RDF lists
-    --restricted                    restricting to core built-ins
     --skolem-genid <genid>          use <genid> in Skolem IRIs
     --version                       show version info
-    --warn                          output warning info on stderr
     --wcache <uri> <file>           to tell that <uri> is cached as <file>
 <data>
     <uri>                           TriG data').
 
 :- dynamic(answer/3).               % answer(Predicate, Subject, Object)
 :- dynamic(apfx/2).
-:- dynamic(argi/1).
 :- dynamic(base_uri/1).
 :- dynamic(bcnd/2).
 :- dynamic(bgot/3).
@@ -93,7 +64,6 @@ eye
 :- dynamic(graph/2).
 :- dynamic(hash_value/2).
 :- dynamic(implies/3).              % implies(Premise, Conclusion, Source)
-:- dynamic(input_statements/1).
 :- dynamic(intern/1).
 :- dynamic(keep_ng/1).
 :- dynamic(keep_skolem/1).
@@ -116,7 +86,6 @@ eye
 :- dynamic(rule_uvar/1).
 :- dynamic(scope/1).
 :- dynamic(scount/1).
-:- dynamic(semantics/2).
 :- dynamic(tabl/3).
 :- dynamic(tmpfile/1).
 :- dynamic(tuple/2).
@@ -172,13 +141,6 @@ main :-
 run :-
     nb_setval(fm, 0),
     nb_setval(mf, 0),
-    current_prolog_flag(version_data, swi(SV, _, _, _)),
-    (   SV < 8
-    ->  format(user_error, '** ERROR ** EYE requires at least swipl version 8 **~n', []),
-        flush_output(user_error),
-        throw(halt(1))
-    ;   true
-    ),
     catch(set_stream(user_output, encoding(utf8)), _, true),
     current_prolog_flag(argv, Argv),
     (   append(_, ['--'|Argvp], Argv)
@@ -195,76 +157,13 @@ run :-
     ;   Argvs = Argvp
     ),
     argv(Argvs, Argus),
-    findall(Argij,
-        (   argi(Argij)
-        ),
-        Argil
-    ),
-    append(Argil, Argi),
-    (   member('--quiet', Argus)
-    ->  true
-    ;   format(user_error, 'eye~@~@~n', [w0(Argi), w1(Argus)]),
-        version_info(Version),
-        format(user_error, '~w~n', [Version]),
-        (   current_prolog_flag(version_git, PVersion)
-        ->  true
-        ;   current_prolog_flag(version_data, swi(Major, Minor, Patch, Options)),
-            (   memberchk(tag(Tag), Options)
-            ->  atomic_list_concat([Major, '.', Minor, '.', Patch, '-', Tag], PVersion)
-            ;   atomic_list_concat([Major, '.', Minor, '.', Patch], PVersion)
-            )
-        ),
-        format(user_error, 'SWI-Prolog version ~w~n', [PVersion]),
-        flush_output(user_error)
-    ),
-    (   retract(prolog_file_type(qlf, qlf))
-    ->  assertz(prolog_file_type(pvm, qlf))
-    ;   true
-    ),
-    (   Argv = ['--n3', _]
-    ->  retractall(flag('parse-only')),
-        assertz(flag('parse-only'))
-    ;   true
-    ),
     catch(gre(Argus), Exc,
         (   Exc = halt(0)
         ->  true
-        ;   (   flag('parse-only')
-            ->  true
-            ;   format(user_error, '** ERROR ** gre ** ~w~n', [Exc]),
-                flush_output(user_error),
-                nb_setval(exit_code, 3)
-            )
+        ;   format(user_error, '** ERROR ** gre ** ~w~n', [Exc]),
+            flush_output(user_error),
+            nb_setval(exit_code, 3)
         )
-    ),
-    (   flag(statistics)
-    ->  statistics
-    ;   true
-    ),
-    (   flag('debug-implies')
-    ->  mf(implies(_, _, _))
-    ;   true
-    ),
-    (   flag('debug-pvm')
-    ->  tell(user_error),
-        ignore(vm_list(_)),
-        told,
-        (   flag('output', Output)
-        ->  tell(Output)
-        ;   true
-        )
-    ;   true
-    ),
-    (   flag('debug-djiti')
-    ->  tell(user_error),
-        jiti_list,
-        nl,
-        told,
-        (   flag('output', Output)
-        ->  tell(Output)
-        ;   true
-        )
-    ;   true
     ),
     nb_getval(fm, Fm),
     (   Fm = 0
@@ -300,29 +199,15 @@ argv([Arg|Argvs], [Arg|Argus]) :-
 % ------------------------------
 
 gre(Argus) :-
-    statistics(runtime, [T0, _]),
-    statistics(walltime, [T1, _]),
-    (   member('--quiet', Argus)
-    ->  true
-    ;   format(user_error, 'starting ~w [msec cputime] ~w [msec walltime]~n', [T0, T1]),
-        flush_output(user_error)
-    ),
     nb_setval(entail_mode, false),
     nb_setval(exit_code, 0),
     nb_setval(indentation, 0),
     nb_setval(limit, -1),
-    nb_setval(bnet, not_done),
-    nb_setval(fnet, not_done),
     nb_setval(tabl, -1),
     nb_setval(tuple, -1),
     nb_setval(fdepth, 0),
     nb_setval(pdepth, 0),
     nb_setval(cdepth, 0),
-    (   input_statements(Ist)
-    ->  nb_setval(input_statements, Ist)
-    ;   nb_setval(input_statements, 0)
-    ),
-    nb_setval(output_statements, 0),
     nb_setval(current_scope, '<>'),
     nb_setval(wn, 0),
     opts(Argus, Args),
@@ -336,45 +221,7 @@ gre(Argus) :-
     ),
     atomic_list_concat(['http://eyereasoner.github.io/.well-known/genid/', Genid, '#'], Sns),
     nb_setval(var_ns, Sns),
-    (   flag(image, _)
-    ->  true
-    ;   version_info(Version),
-        (   flag(quiet)
-        ->  true
-        ;   (   flag('n3p-output')
-            ->  format('% Processed by ~w~n', [Version])
-            ;   format('# Processed by ~w~n', [Version])
-            )
-        ),
-        findall(Argij,
-            (   argi(Argij)
-            ),
-            Argil
-        ),
-        append(Argil, Argi),
-        (   flag(quiet)
-        ->  true
-        ;   (   flag('n3p-output')
-            ->  format('% eye~@~@~n~n', [w0(Argi), w1(Argus)])
-            ;   format('# eye~@~@~n~n', [w0(Argi), w1(Argus)])
-            ),
-            flush_output
-        )
-    ),
-    (   (   flag('no-qvars')
-        ;   flag('pass-all-ground')
-        )
-    ->  retractall(pfx('var:', _)),
-        assertz(pfx('var:', '<http://www.w3.org/2000/10/swap/var#>'))
-    ;   true
-    ),
-    (   flag(intermediate, Out)
-    ->  format(Out, 'flag(\'quantify\', \'~w\').~n', [Sns])
-    ;   true
-    ),
     args(Args),
-    assertz(flag(nope)),
-    assertz(flag(explain)),
     % create named graphs
     (   quad(_, A),
         findall(C,
@@ -414,7 +261,6 @@ gre(Argus) :-
         fail
     ;   true
     ),
-    \+flag('pass-merged'),
     % forward rule
     assertz(implies((
             '<http://www.w3.org/2000/10/swap/lingua#premise>'(R, A),
@@ -422,8 +268,7 @@ gre(Argus) :-
             findvars([A, B], V, alpha),
             list_to_set(V, U),
             makevars([A, B, U], [Q, I, X], beta(U)),
-            (   flag(explain),
-                I \= false
+            (   I \= false
             ->  zip_list(U, X, W),
                 conj_append(I, remember(answer('<http://www.w3.org/2000/10/swap/lingua#premise>', R, A)), D),
                 conj_append(D, remember(answer('<http://www.w3.org/2000/10/swap/lingua#conclusion>', R, B)), E),
@@ -437,13 +282,10 @@ gre(Argus) :-
             findvars([A, B], V, alpha),
             list_to_set(V, U),
             makevars([A, B, U], [Q, I, X], beta(U)),
-            (   flag(explain)
-            ->  zip_list(U, X, W),
-                conj_append(Q, remember(answer('<http://www.w3.org/2000/10/swap/lingua#body>', R, A)), D),
-                conj_append(D, remember(answer('<http://www.w3.org/2000/10/swap/lingua#head>', R, B)), E),
-                conj_append(E, remember(answer('<http://www.w3.org/2000/10/swap/lingua#bindings>', R, W)), F)
-            ;   F = Q
-            ),
+            zip_list(U, X, W),
+            conj_append(Q, remember(answer('<http://www.w3.org/2000/10/swap/lingua#body>', R, A)), D),
+            conj_append(D, remember(answer('<http://www.w3.org/2000/10/swap/lingua#head>', R, B)), E),
+            conj_append(E, remember(answer('<http://www.w3.org/2000/10/swap/lingua#bindings>', R, W)), F),
             C = ':-'(I, F),
             copy_term_nat(C, CC),
             labelvars(CC, 0, _, avar),
@@ -464,13 +306,10 @@ gre(Argus) :-
             findvars([A, B], V, alpha),
             list_to_set(V, U),
             makevars([A, J, U], [Q, I, X], beta(U)),
-            (   flag(explain)
-            ->  zip_list(U, X, W),
-                conj_append(Q, remember(answer('<http://www.w3.org/2000/10/swap/lingua#question>', R, A)), D),
-                conj_append(D, remember(answer('<http://www.w3.org/2000/10/swap/lingua#answer>', R, B)), E),
-                conj_append(E, remember(answer('<http://www.w3.org/2000/10/swap/lingua#bindings>', R, W)), F)
-            ;   F = Q
-            ),
+            zip_list(U, X, W),
+            conj_append(Q, remember(answer('<http://www.w3.org/2000/10/swap/lingua#question>', R, A)), D),
+            conj_append(D, remember(answer('<http://www.w3.org/2000/10/swap/lingua#answer>', R, B)), E),
+            conj_append(E, remember(answer('<http://www.w3.org/2000/10/swap/lingua#bindings>', R, W)), F),
             C = implies(F, I, '<>'),
             copy_term_nat(C, CC),
             labelvars(CC, 0, _, avar),
@@ -480,56 +319,13 @@ gre(Argus) :-
                 retractall(brake)
             ;   true
             )), true, '<>')),
-    (   implies(_, Conc, _),
-        (   var(Conc)
-        ;   Conc \= answer(_, _, _),
-            Conc \= (answer(_, _, _), _)
-        )
-    ->  true
-    ;   (   \+flag(image, _),
-            \+flag(tactic, 'linear-select')
-        ->  assertz(flag(tactic, 'linear-select'))
-        ;   true
-        )
-    ),
+    % set scope
     findall(Sc,
         (   scope(Sc)
         ),
         Scope
     ),
     nb_setval(scope, Scope),
-    statistics(runtime, [_, T2]),
-    statistics(walltime, [_, T3]),
-    (   flag(quiet)
-    ->  true
-    ;   format(user_error, 'networking ~w [msec cputime] ~w [msec walltime]~n', [T2, T3]),
-        flush_output(user_error)
-    ),
-    nb_getval(input_statements, SC),
-    (   flag(image, File)
-    ->  assertz(argi(Argus)),
-        retractall(flag(image, _)),
-        assertz(flag('quantify', Sns)),
-        retractall(input_statements(_)),
-        assertz(input_statements(SC)),
-        reset_gensym,
-        (   current_predicate(qsave:qsave_program/1)
-        ->  qsave_program(File)
-        ;   save_program(File)
-        ),
-        throw(halt(0))
-    ;   true
-    ),
-    (   flag(intermediate, Out)
-    ->  (   SC =\= 0
-        ->  write(Out, scount(SC)),
-            writeln(Out, '.')
-        ;   true
-        ),
-        writeln(Out, 'end_of_file.'),
-        close(Out)
-    ;   true
-    ),
     (   pfx('r:', _)
     ->  true
     ;   assertz(pfx('r:', '<http://www.w3.org/2000/10/swap/reason#>'))
@@ -548,108 +344,19 @@ gre(Argus) :-
     ->  true
     ;   assertz(pfx('n3:', '<http://www.w3.org/2004/06/rei#>'))
     ),
-    nb_setval(tr, 0),
-    nb_setval(tc, 0),
-    nb_setval(tp, 0),
     nb_setval(rn, 0),
-    nb_setval(answer_count, 0),
     nb_setval(keep_ng, true),
-    (   flag(profile)
-    ->  asserta(pce_profile:pce_show_profile :- fail),
-        profile(eam(0))
-    ;   catch(eam(0), Exc3,
-            (   (   Exc3 = halt(0)
-                ->  true
-                ;   format(user_error, '** ERROR ** eam ** ~w~n', [Exc3]),
-                    flush_output(user_error),
-                    (   Exc3 = inference_fuse(_)
-                    ->  nb_setval(exit_code, 2)
-                    ;   nb_setval(exit_code, 3)
-                    )
+    catch(eam(0), Exc3,
+        (   (   Exc3 = halt(0)
+            ->  true
+            ;   format(user_error, '** ERROR ** eam ** ~w~n', [Exc3]),
+                flush_output(user_error),
+                (   Exc3 = inference_fuse(_)
+                ->  nb_setval(exit_code, 2)
+                ;   nb_setval(exit_code, 3)
                 )
             )
         )
-    ),
-    (   flag('pass-only-new')
-    ->  open_null_stream(Ws),
-        tell(Ws),
-        w2,
-        retractall(pfx(_, _)),
-        retractall(wpfx(_)),
-        forall(
-            apfx(Pfx, Uri),
-            assertz(pfx(Pfx, Uri))
-        ),
-        told,
-        (   flag('output', Output)
-        ->  tell(Output)
-        ;   true
-        ),
-        w2
-    ;   true
-    ),
-    nb_getval(tc, TC),
-    nb_getval(tp, TP),
-    statistics(runtime, [_, T4]),
-    statistics(walltime, [_, T5]),
-    (   flag(quiet)
-    ->  true
-    ;   format(user_error, 'reasoning ~w [msec cputime] ~w [msec walltime]~n', [T4, T5]),
-        flush_output(user_error)
-    ),
-    nb_getval(input_statements, Inp),
-    nb_getval(output_statements, Outp),
-    timestamp(Stamp),
-    Ent is TC,
-    Step is TP,
-    statistics(runtime, [Cpu, _]),
-    nb_getval(tr, TR),
-    Brake is TR,
-    (   statistics(inferences, Inf)
-    ->  true
-    ;   Inf = ''
-    ),
-    catch(Speed is round(Inf/Cpu*1000), _, Speed = ''),
-    (   flag(quiet)
-    ->  true
-    ;   (   flag('n3p-output')
-        ->  format('% ~w in=~d out=~d ent=~d step=~w brake=~w inf=~w sec=~3d inf/sec=~w~n% ENDS~n~n', [Stamp, Inp, Outp, Ent, Step, Brake, Inf, Cpu, Speed])
-        ;   format('# ~w in=~d out=~d ent=~d step=~w brake=~w inf=~w sec=~3d inf/sec=~w~n# ENDS~n~n', [Stamp, Inp, Outp, Ent, Step, Brake, Inf, Cpu, Speed])
-        )
-    ),
-    (   flag(quiet)
-    ->  true
-    ;   format(user_error, '~w in=~d out=~d ent=~d step=~w brake=~w inf=~w sec=~3d inf/sec=~w~n~n', [Stamp, Inp, Outp, Ent, Step, Brake, Inf, Cpu, Speed]),
-        flush_output(user_error)
-    ),
-    (   flag('rule-histogram')
-    ->  findall([RTC, RTP, R],
-            (   tabl(ETP, tp, Rule),
-                nb_getval(ETP, RTP),
-                (   tabl(ETC, tc, Rule)
-                ->  nb_getval(ETC, RTC)
-                ;   RTC = 0
-                ),
-                with_output_to(atom(R), wt(Rule))
-            ),
-            CntRl
-        ),
-        sort(CntRl, CntRs),
-        reverse(CntRs, CntRr),
-        format(user_error, '>>> rule histogram TR=~w <<<~n', [TR]),
-        forall(
-            member(RCnt, CntRr),
-            (   (   last(RCnt, '<http://www.w3.org/2000/10/swap/log#implies>'(X, Y)),
-                    conj_append(X, pstep(_), Z),
-                    catch(clause(Y, Z), _, fail)
-                ->  format(user_error, 'TC=~w TP=~w for component ~w~n', RCnt)
-                ;   format(user_error, 'TC=~w TP=~w for rule ~w~n', RCnt)
-                )
-            )
-        ),
-        format(user_error, '~n', []),
-        flush_output(user_error)
-    ;   true
     ).
 
 %
@@ -658,23 +365,10 @@ gre(Argus) :-
 
 opts([], []) :-
     !.
-opts(['--debug'|Argus], Args) :-
-    !,
-    retractall(flag(debug)),
-    assertz(flag(debug)),
-    opts(Argus, Args).
 opts(['--help'|_], _) :-
-    \+flag(image, _),
-    \+flag('debug-pvm'),
     !,
     help_info(Help),
     format(user_error, '~w~n', [Help]),
-    flush_output(user_error),
-    throw(halt(0)).
-opts(['--license'|_], _) :-
-    !,
-    license_info(License),
-    format(user_error, '~w~n', [License]),
     flush_output(user_error),
     throw(halt(0)).
 opts(['--output', File|Argus], Args) :-
@@ -684,21 +378,6 @@ opts(['--output', File|Argus], Args) :-
     tell(Out),
     assertz(flag('output', Out)),
     opts(Argus, Args).
-opts(['--quiet'|Argus], Args) :-
-    !,
-    retractall(flag(quiet)),
-    assertz(flag(quiet)),
-    opts(Argus, Args).
-opts(['--rdf-list-output'|Argus], Args) :-
-    !,
-    retractall(flag('rdf-list-output')),
-    assertz(flag('rdf-list-output')),
-    opts(Argus, Args).
-opts(['--restricted'|Argus], Args) :-
-    !,
-    retractall(flag(restricted)),
-    assertz(flag(restricted)),
-    opts(Argus, Args).
 opts(['--skolem-genid', Genid|Argus], Args) :-
     !,
     retractall(flag('skolem-genid', _)),
@@ -707,11 +386,6 @@ opts(['--skolem-genid', Genid|Argus], Args) :-
 opts(['--version'|_], _) :-
     !,
     throw(halt(0)).
-opts(['--warn'|Argus], Args) :-
-    !,
-    retractall(flag(warn)),
-    assertz(flag(warn)),
-    opts(Argus, Args).
 opts(['--wcache', Argument, File|Argus], Args) :-
     !,
     absolute_uri(Argument, Arg),
@@ -733,23 +407,9 @@ args([Argument|Args]) :-
     absolute_uri(Argument, Arg),
     atomic_list_concat(['<', Arg, '>'], R),
     assertz(scope(R)),
-    (   flag(intermediate, Out)
-    ->  portray_clause(Out, scope(R))
-    ;   true
-    ),
     (   wcacher(Arg, File)
-    ->  (   flag(quiet)
-        ->  true
-        ;   format(user_error, 'GET ~w FROM ~w ', [Arg, File]),
-            flush_output(user_error)
-        ),
-        open(File, read, In, [encoding(utf8)])
-    ;   (   flag(quiet)
-        ->  true
-        ;   format(user_error, 'GET ~w ', [Arg]),
-            flush_output(user_error)
-        ),
-        (   (   sub_atom(Arg, 0, 5, _, 'http:')
+    ->  open(File, read, In, [encoding(utf8)])
+    ;   (   (   sub_atom(Arg, 0, 5, _, 'http:')
             ->  true
             ;   sub_atom(Arg, 0, 6, _, 'https:')
             )
@@ -796,15 +456,7 @@ args([Argument|Args]) :-
             trig_n3p(P, Predicate),
             trig_n3p(O, Object),
             Triple =.. [Predicate, Subject, Object],
-            djiti_assertz(Triple),
-            (   flag(intermediate, Out)
-            ->  format(Out, '~q.~n', [Triple])
-            ;   true
-            ),
-            (   flag(nope)
-            ->  true
-            ;   assertz(prfstep(Triple, true, _, Triple, _, forward, R))
-            )
+            djiti_assertz(Triple)
         )
     ),
     forall(
@@ -816,15 +468,6 @@ args([Argument|Args]) :-
             trig_n3p(H, Graph),
             assertz(quad(triple(Subject, Predicate, Object), Graph))
         )
-    ),
-    length(Triples, SC),
-    nb_getval(input_statements, IN),
-    Inp is SC+IN,
-    nb_setval(input_statements, Inp),
-    (   flag(quiet)
-    ->  true
-    ;   format(user_error, 'SC=~w~n', [SC]),
-        flush_output(user_error)
     ),
     args(Args).
 
@@ -894,63 +537,13 @@ wh :-
     ->  nb_getval(var_ns, Sns),
         put_pfx('skolem', Sns)
     ;   true
-    ),
-    (   flag('no-qnames')
-    ->  true
-    ;   nb_setval(wpfx, false),
-        forall(
-            (   pfx(A, B),
-                \+wpfx(A)
-            ),
-            (   format('@prefix ~w ~w.~n', [A, B]),
-                assertz(wpfx(A)),
-                nb_setval(wpfx, true)
-            )
-        ),
-        (   \+ (flag('pass-only-new'), flag(nope)),
-            nb_getval(wpfx, true)
-        ->  nl
-        ;   true
-        )
-    ).
-
-w2 :-
-    (   flag('n3p-output')
-    ->  true
-    ;   wh,
-        nl
-    ),
-    forall(
-        pass_only_new(Zn),
-        (   indent,
-            relabel(Zn, Zr),
-            (   flag('n3p-output')
-            ->  makeblank(Zr, Zs),
-                writeq(Zs)
-            ;   wt(Zr)
-            ),
-            ws(Zr),
-            write('.'),
-            nl,
-            (   (   Zr = '<http://www.w3.org/2000/10/swap/log#implies>'(_, _)
-                )
-            ->  nl
-            ;   true
-            ),
-            cnt(output_statements)
-        )
     ).
 
 w3 :-
-    (   flag('n3p-output')
-    ->  true
-    ;   wh
-    ),
+    wh,
     nb_setval(fdepth, 0),
     nb_setval(pdepth, 0),
     nb_setval(cdepth, 0),
-    flag(nope),
-    !,
     (   query(Q, A),
         (   Q = \+(R)
         ->  \+catch(call(R), _, fail)
@@ -961,12 +554,7 @@ w3 :-
         nb_setval(wn, N),
         relabel(A, B),
         indent,
-        (   flag('n3p-output')
-        ->  makeblank(B, Ba),
-            exo_pred(Ba, Bb),
-            writeq(Bb)
-        ;   wt(B)
-        ),
+        wt(B),
         ws(B),
         (   (   B = graph(_, _)
             ;   B = exopred(graph, _, _)
@@ -975,12 +563,6 @@ w3 :-
         ;   write('.')
         ),
         nl,
-        (   A = (_, _),
-            conj_list(A, L)
-        ->  length(L, I),
-            cnt(output_statements, I)
-        ;   cnt(output_statements)
-        ),
         fail
     ;   true
     ),
@@ -988,12 +570,7 @@ w3 :-
         relabel([B1, B2, B3], [C1, C2, C3]),
         djiti_answer(answer(C), answer(C1, C2, C3)),
         indent,
-        (   flag('n3p-output')
-        ->  makeblank(C, Ca),
-            exo_pred(Ca, Cb),
-            writeq(Cb)
-        ;   wt(C)
-        ),
+        wt(C),
         ws(C),
         (   (   C = graph(_, _)
             ;   C = exopred(graph, _, _)
@@ -1002,7 +579,6 @@ w3 :-
         ;   write('.')
         ),
         nl,
-        cnt(output_statements),
         fail
     ;   true
     ).
@@ -1036,51 +612,34 @@ wt0(:-) :-
     wp('<http://www.w3.org/2000/10/swap/log#isImpliedBy>').
 wt0([]) :-
     !,
-    (   flag('rdf-list-output')
-    ->  wt0('<http://www.w3.org/1999/02/22-rdf-syntax-ns#nil>')
-    ;   write('()')
-    ).
+    write('()').
 wt0(X) :-
     number(X),
     !,
-    (   flag('no-numerals')
-    ->  dtlit([U, V], X),
-        dtlit([U, V], W),
-        wt(W)
-    ;   write(X)
-    ).
+    write(X).
 wt0(X) :-
     atom(X),
     atom_concat(some, Y, X),
     !,
-    (   \+flag('no-qvars')
-    ->  (   rule_uvar(L),
-            (   ncllit
-            ->  (   memberchk(X, L)
-                ->  true
-                ;   retract(rule_uvar(L)),
-                    assertz(rule_uvar([X|L]))
-                )
-            ;   memberchk(X, L)
+    (   rule_uvar(L),
+        (   ncllit
+        ->  (   memberchk(X, L)
+            ->  true
+            ;   retract(rule_uvar(L)),
+                assertz(rule_uvar([X|L]))
             )
-        ->  write('?U_')
-        ;   write('_:sk_')
-        ),
-        write(Y)
-    ;   atomic_list_concat(['<http://www.w3.org/2000/10/swap/var#some_', Y, '>'], Z),
-        wt0(Z)
-    ).
+        ;   memberchk(X, L)
+        )
+    ->  write('?U_')
+    ;   write('_:sk_')
+    ),
+    write(Y).
 wt0(X) :-
     atom(X),
     atom_concat(allv, Y, X),
     !,
-    (   \+flag('no-qvars'),
-        \+flag('pass-all-ground')
-    ->  write('var:U_'),
-        write(Y)
-    ;   atomic_list_concat(['<http://www.w3.org/2000/10/swap/var#all_', Y, '>'], Z),
-        wt0(Z)
-    ).
+    write('var:U_'),
+    write(Y).
 wt0(X) :-
     atom(X),
     atom_concat(avar, Y, X),
@@ -1088,8 +647,6 @@ wt0(X) :-
     atomic_list_concat(['<http://www.w3.org/2000/10/swap/var#x_', Y, '>'], Z),
     wt0(Z).
 wt0(X) :-
-    flag(nope),
-    \+flag('pass-all-ground'),
     \+keep_skolem(X),
     nb_getval(var_ns, Sns),
     atom(X),
@@ -1115,12 +672,7 @@ wt0(X) :-
                 memberchk(Z, ['x_', 't_']),
                 write('?')
             )
-        ;   (   \+flag('no-qvars')
-            ->  true
-            ;   flag('quantify', Prefix),
-                sub_atom(X, 1, _, _, Prefix)
-            ),
-            write('_:')
+        ;   write('_:')
         ),
         write(Y),
         (   sub_atom(Y, 0, 2, _, 'x_')
@@ -1134,8 +686,7 @@ wt0(X) :-
 wt0(X) :-
     (   wtcache(X, W)
     ->  true
-    ;   (   \+flag('no-qnames'),
-            atom(X),
+    ;   (   atom(X),
             (   sub_atom(X, I, 1, J, '#')
             ->  J > 1,
                 sub_atom(X, 0, I, _, C),
@@ -1222,29 +773,10 @@ wt2((X, Y)) :-
     ).
 wt2([X|Y]) :-
     !,
-    (   flag('rdf-list-output')
-    ->  write('['),
-        nl,
-        indentation(4),
-        indent,
-        wt0('<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>'),
-        write(' '),
-        wg(X),
-        write('; '),
-        nl,
-        indent,
-        wt0('<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>'),
-        write(' '),
-        wt(Y),
-        nl,
-        indentation(-4),
-        indent,
-        write(']')
-    ;   write('('),
-        wg(X),
-        wl(Y),
-        write(')')
-    ).
+    write('('),
+    wg(X),
+    wl(Y),
+    write(')').
 wt2(literal(X, lang(Y))) :-
     !,
     write('"'),
@@ -1293,45 +825,12 @@ wt2(rdiv(X, Y)) :-
         ;   atomic_list_concat(['~', N, 'd'], F)
         )
     ),
-    (   flag('no-numerals')
-    ->  write('"')
-    ;   true
-    ),
-    format(F, [X]),
-    (   flag('no-numerals')
-    ->  write('"^^'),
-        wt0('<http://www.w3.org/2001/XMLSchema#decimal>')
-    ;   true
-    ).
+    format(F, [X]).
 wt2(rdiv(X, Y)) :-
     !,
-    (   flag('no-numerals')
-    ->  write('"')
-    ;   true
-    ),
-    format('~g', [rdiv(X, Y)]),
-    (   flag('no-numerals')
-    ->  write('"^^'),
-        wt0('<http://www.w3.org/2001/XMLSchema#decimal>')
-    ;   true
-    ).
+    format('~g', [rdiv(X, Y)]).
 wt2('<http://www.w3.org/2000/10/swap/log#implies>'(X, Y)) :-
-    (   flag(nope)
-    ->  U = X
-    ;   (   X = when(A, B)
-        ->  conj_append(B, istep(_, _, _, _), C),
-            U = when(A, C)
-        ;   conj_append(X, istep(_, _, _, _), U)
-        )
-    ),
-    (   flag('rule-histogram')
-    ->  (   U = when(D, E)
-        ->  conj_append(E, pstep(_), F),
-            Z = when(D, F)
-        ;   conj_append(U, pstep(_), Z)
-        )
-    ;   Z = U
-    ),
+    Z = X,
     (   rule_uvar(R)
     ->  true
     ;   R = [],
@@ -1570,26 +1069,16 @@ wg(X) :-
     ).
 
 wp('<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>') :-
-    \+flag('no-qnames'),
     !,
     write('a').
 wp('<http://www.w3.org/2000/10/swap/log#implies>') :-
-    \+flag('no-qnames'),
     !,
     write('=>').
 wp(':-') :-
-    \+flag('no-qnames'),
     !,
     write('<=').
 wp(X) :-
     wg(X).
-
-wk([]) :-
-    !.
-wk([X|Y]) :-
-    write(', '),
-    wt(X),
-    wk(Y).
 
 wl([]) :-
     !.
@@ -1597,92 +1086,6 @@ wl([X|Y]) :-
     write(' '),
     wg(X),
     wl(Y).
-
-wq([], _) :-
-    !.
-wq([X|Y], allv) :-
-    !,
-    write('@forAll '),
-    wt(X),
-    wk(Y),
-    write('. ').
-wq([X|Y], some) :-
-    (   \+flag('no-qvars')
-    ->  write('@forSome '),
-        wt(X),
-        wk(Y),
-        write('. ')
-    ;   true
-    ).
-
-wb([]) :-
-    !.
-wb([X = Y|Z]) :-
-    wp('<http://www.w3.org/2000/10/swap/reason#binding>'),
-    write(' [ '),
-    wp('<http://www.w3.org/2000/10/swap/reason#variable>'),
-    write(' '),
-    wv(X),
-    write('; '),
-    wp('<http://www.w3.org/2000/10/swap/reason#boundTo>'),
-    write(' '),
-    wv(Y),
-    write('];'),
-    nl,
-    indent,
-    wb(Z).
-
-wv(X) :-
-    atom(X),
-    atom_concat(avar, Y, X),
-    !,
-    write('[ '),
-    wp('<http://www.w3.org/2004/06/rei#uri>'),
-    write(' "http://www.w3.org/2000/10/swap/var#x_'),
-    write(Y),
-    write('"]').
-wv(X) :-
-    atom(X),
-    atom_concat(some, Y, X),
-    !,
-    write('[ '),
-    wp('<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>'),
-    write(' '),
-    wp('<http://www.w3.org/2000/10/swap/reason#Existential>'),
-    write('; '),
-    wp('<http://www.w3.org/2004/06/rei#nodeId>'),
-    write(' "_:sk_'),
-    write(Y),
-    write('"]').
-wv(X) :-
-    atom(X),
-    nb_getval(var_ns, Sns),
-    sub_atom(X, 1, I, _, Sns),
-    !,
-    write('[ '),
-    wp('<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>'),
-    write(' '),
-    wp('<http://www.w3.org/2000/10/swap/reason#Existential>'),
-    write('; '),
-    wp('<http://www.w3.org/2004/06/rei#nodeId>'),
-    write(' "'),
-    write(Sns),
-    J is I+1,
-    sub_atom(X, J, _, 1, Q),
-    write(Q),
-    write('"]').
-wv(X) :-
-    atom(X),
-    sub_atom(X, 1, _, 1, U),
-    atomic_list_concat(['<', U, '>'], X),
-    !,
-    write('[ '),
-    wp('<http://www.w3.org/2004/06/rei#uri>'),
-    write(' "'),
-    write(U),
-    write('"]').
-wv(X) :-
-    wg(X).
 
 ws((X, Y)) :-
     !,
@@ -1695,10 +1098,7 @@ ws(X) :-
     (   \+number(Z),
         Z \= rdiv(_, _)
     ->  true
-    ;   (   \+flag('n3p-output')
-        ->  write(' ')
-        ;   true
-        )
+    ;   write(' ')
     ).
 
 indent:-
@@ -1714,75 +1114,25 @@ indentation(C) :-
 % ----------------------------
 % EAM (Euler Abstract Machine)
 % ----------------------------
-%
-% In a nutshell:
-%
-% 1/ Select rule P => C
-% 2/ Prove P & NOT(C) (backward chaining) and if it fails backtrack to 1/
-% 3/ If P & NOT(C) assert C (forward chaining) and remove brake
-% 4/ If C = answer(A) and tactic limited-answer stop, else backtrack to 2/
-% 5/ If brake or tactic linear-select stop, else start again at 1/
-%
 
 eam(Recursion) :-
-    (   cnt(tr),
-        (   flag(debug)
-        ->  format(user_error, 'eam/1 entering recursion ~w~n', [Recursion]),
-            flush_output(user_error)
-        ;   true
-        ),
-        (   flag('max-inferences', MaxInf),
-            statistics(inferences, Inf),
-            Inf > MaxInf
-        ->  throw(max_inferences_exceeded(MaxInf))
-        ;   true
-        ),
-        implies(Prem, Conc, Src),
+    (   implies(Prem, Conc, _),
         ignore(Prem = true),
-        (   flag(nope),
-            \+flag('rule-histogram')
-        ->  true
-        ;   copy_term_nat('<http://www.w3.org/2000/10/swap/log#implies>'(Prem, Conc), Rule)
-        ),
-        (   flag(debug)
-        ->  format(user_error, '. eam/1 selecting rule ~q~n', [implies(Prem, Conc, Src)]),
-            flush_output(user_error)
-        ;   true
-        ),
-        (   flag('no-ucall')
-        ->  catch(call_residue_vars(call(Prem), []), Exc,
-                (   Exc = error(existence_error(procedure, _), _)
-                ->  fail
-                ;   throw(Exc)
-                )
-            )
-        ;   catch(call_residue_vars(ucall(Prem), []), Exc,
-                (   Exc = error(existence_error(procedure, _), _)
-                ->  fail
-                ;   throw(Exc)
-                )
+        catch(call_residue_vars(ucall(Prem), []), Exc,
+            (   Exc = error(existence_error(procedure, _), _)
+            ->  fail
+            ;   throw(Exc)
             )
         ),
         (   (   Conc = false
             ;   Conc = answer(false, void, void)
             )
         ->  with_output_to(atom(PN3), writeq('<http://www.w3.org/2000/10/swap/log#implies>'(Prem, false))),
-            (   flag('ignore-inference-fuse')
-            ->  format(user_error, '** ERROR ** eam ** ~w~n', [inference_fuse(PN3)]),
-                fail
-            ;   throw(inference_fuse(PN3))
-            )
+            throw(inference_fuse(PN3))
         ;   true
         ),
         \+atom(Conc),
         \+is_list(Conc),
-        (   flag('rule-histogram'),
-            copy_term_nat(Rule, RuleL)
-        ->  lookup(RTP, tp, RuleL),
-            catch(cnt(RTP), _, nb_setval(RTP, 0))
-        ;   true
-        ),
-        cnt(tp),
         djiti_conc(Conc, Concd),
         (   Concd = ':-'(Head, Body)
         ->  \+clause(Head, Body)
@@ -1791,22 +1141,8 @@ eam(Recursion) :-
                 labelvars(Concc, 0, _, avar),
                 \+cc(Concc),
                 assertz(cc(Concc))
-            ;   (   flag('no-ucall')
-                ->  \+catch(call(Concd), _, fail)
-                ;   \+catch(ucall(Concd), _, fail)
-                )
+            ;   \+catch(ucall(Concd), _, fail)
             )
-        ),
-        (   flag('rule-histogram')
-        ->  lookup(RTC, tc, RuleL),
-            catch(cnt(RTC), _, nb_setval(RTC, 0))
-        ;   true
-        ),
-        (   Concd = (_, _),
-            conj_list(Concd, Cl)
-        ->  length(Cl, Ci),
-            cnt(tc, Ci)
-        ;   cnt(tc)
         ),
         (   Concd \= ':-'(_, _)
         ->  nb_getval(wn, W),
@@ -1814,43 +1150,9 @@ eam(Recursion) :-
             nb_setval(wn, N)
         ;   true
         ),
-        (   flag(debug)
-        ->  format(user_error, '... eam/1 assert step ~q~n', [Concd]),
-            flush_output(user_error)
-        ;   true
-        ),
-        conj_list(Concd, La),
-        couple(La, La, Lc),
-        findall([D, F],
-            (   member([D, D], Lc),
-                unify(D, F),
-                (   F = '<http://www.w3.org/2000/10/swap/log#implies>'(_, _)
-                ->  true
-                ;   catch(\+F, _, true)
-                )
-            ),
-            Ld
-        ),
-        couple(Ls, Le, Ld),
-        conj_list(Concs, Ls),
-        conj_list(Conce, Le),
-        astep(Src, Prem, Concd, Conce, Rule),
-        (   (   Concs = answer(_, _, _)
-            ;   Concs = (answer(_, _, _), _)
-            )
-        ->  cnt(answer_count)
-        ;   true
-        ),
-        nb_getval(answer_count, AnswerCount),
-        (   flag('limited-answer', AnswerLimit),
-            AnswerCount >= AnswerLimit
-        ->  w3
-        ;   retract(brake),
-            fail
-        )
-    ;   (   brake
-        ;   flag(tactic, 'linear-select')
-        ),
+        retract(brake),
+        fail
+    ;   brake,
         (   R is Recursion+1,
             (   \+recursion(R)
             ->  assertz(recursion(R))
@@ -1859,49 +1161,45 @@ eam(Recursion) :-
             nb_getval(limit, Limit),
             Recursion < Limit,
             eam(R)
-        ;   (   flag('pass-only-new')
-            ->  true
-            ;   open_null_stream(Ws),
-                tell(Ws),
-                nb_getval(wn, Wn),
-                w3,
-                forall(
-                    retract(keep_ng(NG)),
-                    (   wt(NG),
-                        nl
-                    )
-                ),
-                forall(
-                    retract(keep_ng(NG)),
-                    (   wt(NG),
-                        nl
-                    )
-                ),
-                retractall(pfx(_, _)),
-                retractall(wpfx(_)),
-                nb_setval(wn, Wn),
-                nb_setval(output_statements, 0),
-                forall(
-                    apfx(Pfx, Uri),
-                    assertz(pfx(Pfx, Uri))
-                ),
-                told,
-                (   flag('output', Output)
-                ->  tell(Output)
-                ;   true
-                ),
-                w3,
-                forall(
-                    retract(keep_ng(NG)),
-                    (   wt(NG),
-                        nl
-                    )
-                ),
-                forall(
-                    retract(keep_ng(NG)),
-                    (   wt(NG),
-                        nl
-                    )
+        ;   open_null_stream(Ws),
+            tell(Ws),
+            nb_getval(wn, Wn),
+            w3,
+            forall(
+                retract(keep_ng(NG)),
+                (   wt(NG),
+                    nl
+                )
+            ),
+            forall(
+                retract(keep_ng(NG)),
+                (   wt(NG),
+                    nl
+                )
+            ),
+            retractall(pfx(_, _)),
+            retractall(wpfx(_)),
+            nb_setval(wn, Wn),
+            forall(
+                apfx(Pfx, Uri),
+                assertz(pfx(Pfx, Uri))
+            ),
+            told,
+            (   flag('output', Output)
+            ->  tell(Output)
+            ;   true
+            ),
+            w3,
+            forall(
+                retract(keep_ng(NG)),
+                (   wt(NG),
+                    nl
+                )
+            ),
+            forall(
+                retract(keep_ng(NG)),
+                (   wt(NG),
+                    nl
                 )
             )
         ;   true
@@ -1911,105 +1209,6 @@ eam(Recursion) :-
         exogen,
         eam(Recursion)
     ).
-
-astep(A, B, Cd, Cn, Rule) :-        % astep(Source, Premise, Conclusion, Conclusion_unique, Rule)
-    (   Cn = (Dn, En)
-    ->  functor(Dn, P, N),
-        (   \+pred(P),
-            P \= '<http://www.w3.org/2000/10/swap/log#implies>',
-            P \= '<http://www.w3.org/2000/10/swap/log#callWithCleanup>',
-            N = 2
-        ->  assertz(pred(P))
-        ;   true
-        ),
-        (   Dn \= '<http://www.w3.org/2000/10/swap/log#implies>'(_, _),
-            catch(call(Dn), _, fail)
-        ->  true
-        ;   djiti_assertz(Dn),
-            (   flag('pass-only-new'),
-                Dn \= answer(_, _, _),
-                \+pass_only_new(Dn)
-            ->  assertz(pass_only_new(Dn))
-            ;   true
-            ),
-            (   flag(nope)
-            ->  true
-            ;   term_index(B, Pnd),
-                assertz(prfstep(Dn, B, Pnd, Cd, Rule, forward, A))
-            )
-        ),
-        astep(A, B, Cd, En, Rule)
-    ;   (   Cn = true
-        ->  true
-        ;   functor(Cn, P, N),
-            (   \+pred(P),
-                P \= '<http://www.w3.org/2000/10/swap/log#callWithCleanup>',
-                P \= '<http://www.w3.org/2000/10/swap/log#implies>',
-                N = 2
-            ->  assertz(pred(P))
-            ;   true
-            ),
-            (   Cn \= '<http://www.w3.org/2000/10/swap/log#implies>'(_, _),
-                catch(call(Cn), _, fail)
-            ->  true
-            ;   djiti_assertz(Cn),
-                (   flag('pass-only-new'),
-                    Cn \= answer(_, _, _),
-                    \+pass_only_new(Cn)
-                ->  assertz(pass_only_new(Cn))
-                ;   true
-                ),
-                (   flag(nope)
-                ->  true
-                ;   term_index(B, Pnd),
-                    assertz(prfstep(Cn, B, Pnd, Cd, Rule, forward, A))
-                )
-            )
-        )
-    ).
-
-istep(Src, Prem, Conc, Rule) :-        % istep(Source, Premise, Conclusion, Rule)
-    copy_term_nat(Prem, Prec),
-    labelvars(Prec, 0, _),
-    term_index(Prec, Pnd),
-    (   \+prfstep(Conc, Prec, Pnd, Conc, Rule, backward, Src)
-    ->  assertz(prfstep(Conc, Prec, Pnd, Conc, Rule, backward, Src))
-    ;   true
-    ).
-
-pstep(Rule) :-
-    copy_term_nat(Rule, RuleL),
-    lookup(RTC, tc, RuleL),
-    catch(cnt(RTC), _, nb_setval(RTC, 0)),
-    lookup(RTP, tp, RuleL),
-    catch(cnt(RTP), _, nb_setval(RTP, 0)).
-
-hstep(A, B) :-
-    (   nonvar(A),
-        A = exopred(P, S, O)
-    ->  pred(P),
-        U =.. [P, S, O],
-        qstep(U, B)
-    ;   qstep(A, B)
-    ).
-
-qstep(A, B) :-
-    prfstep(A, B, _, _, _, _, _).
-qstep(A, true) :-
-    (   nonvar(A)
-    ->  (   A =.. [P, [S1, S2|S3], O]
-        ->  B =.. [P, S1, S2, S3, O]
-        ;   (   A =.. [P, S, literal(O1, O2)]
-            ->  B =.. [P, S, O1, O2]
-            ;   B = A
-            )
-        )
-    ;   pred(P),
-        A =.. [P, _, _],
-        B = A
-    ),
-    catch(clause(B, true), _, fail),
-    \+prfstep(A, _, _, _, _, _, _).
 
 %
 % DJITI (Deep Just In Time Indexing)
@@ -2089,20 +1288,7 @@ djiti_fact('<http://www.w3.org/2000/10/swap/log#implies>'(A, B), C) :-
     makevars(implies(A, B, Z), C, zeta).
 djiti_fact(':-'(A, B), ':-'(C, D)) :-
     !,
-    makevars((A, B), (C, E), eta),
-    copy_term_nat('<http://www.w3.org/2000/10/swap/log#implies>'(E, C), F),
-    (   flag(nope)
-    ->  D = E
-    ;   (   retwist(E, C, G)
-        ->  true
-        ;   G = '<>'
-        ),
-        (   E = when(H, I)
-        ->  conj_append(I, istep(G, E, C, F), J),
-            D = when(H, J)
-        ;   conj_append(E, istep(G, E, C, F), D)
-        )
-    ).
+    makevars((A, B), (C, D), eta).
 djiti_fact('<http://www.w3.org/2000/10/swap/log#dcg>'(_, literal(A, type('<http://www.w3.org/2001/XMLSchema#string>'))), B) :-
     !,
     read_term_from_atom(A, C, []),
@@ -2116,7 +1302,6 @@ djiti_fact(A, A) :-
         P \= query,
         P \= pfx,
         P \= flag,
-        P \= semantics,
         \+pred(P)
     ->  assertz(pred(P))
     ;   true
@@ -2466,28 +1651,13 @@ djiti_assertz(A) :-
                 assertz(retwist(Prem, Conc, Src))
             ;   (   E = ':-'(Ci, Pi),
                     Pi \= true
-                ->  (   flag(nope)
-                    ->  Ph = Pi
-                    ;   (   Pi = when(Ai, Bi)
-                        ->  conj_append(Bi, istep(Si, Pi, Ci, _), Bh),
-                            Ph = when(Ai, Bh)
-                        ;   conj_append(Pi, istep(Si, Pi, Ci, _), Ph)
-                        ),
-                        ':-'(Ci, Ph),
-                        assertz(retwist(Pi, Ci, Si))
-                    ),
-                    retract(':-'(Ci, Ph))
+                ->  retract(':-'(Ci, Pi))
                 ;   E \= ':-'(_, true),
                     retract(E)
                 )
             ),
             djiti_answer(answer(E), Z),
-            retractall(Z),
-            (   flag('pass-only-new'),
-                pass_only_new(E)
-            ->  retract(pass_only_new(E))
-            ;   true
-            )
+            retractall(Z)
         )
     ),
     nb_getval(wn, W),
@@ -2497,13 +1667,7 @@ djiti_assertz(A) :-
     conj_list(F, G),
     forall(
         member(H, G),
-        (   djiti_assertz(H),
-            (   flag('pass-only-new'),
-                \+pass_only_new(H)
-            ->  assertz(pass_only_new(H))
-            ;   true
-            )
-        )
+        djiti_assertz(H)
     ).
 
 '<http://www.w3.org/2000/10/swap/log#bound>'(X, Y) :-
@@ -2514,220 +1678,28 @@ djiti_assertz(A) :-
 
 '<http://www.w3.org/2000/10/swap/log#call>'(A, B) :-
     call(A),
-    catch(call(B), _, fail),
-    (   flag(nope)
-    ->  true
-    ;   copy_term_nat('<http://www.w3.org/2000/10/swap/log#implies>'(B, '<http://www.w3.org/2000/10/swap/log#call>'(A, B)), C),
-        istep('<>', B, '<http://www.w3.org/2000/10/swap/log#call>'(A, B), C)
-    ).
+    catch(call(B), _, fail).
 
 '<http://www.w3.org/2000/10/swap/log#callNotBind>'(A, B) :-
     \+ \+call(A),
-    \+ \+catch(call(B), _, fail),
-    (   flag(nope)
-    ->  true
-    ;   copy_term_nat('<http://www.w3.org/2000/10/swap/log#implies>'(B, '<http://www.w3.org/2000/10/swap/log#call>'(A, B)), C),
-        istep('<>', B, '<http://www.w3.org/2000/10/swap/log#call>'(A, B), C)
-    ).
+    \+ \+catch(call(B), _, fail).
 
 '<http://www.w3.org/2000/10/swap/log#callWithCleanup>'(A, B) :-
-    call_cleanup(A, B),
-    (   flag(nope)
-    ->  true
-    ;   conj_append(A, B, C),
-        copy_term_nat('<http://www.w3.org/2000/10/swap/log#implies>'(C, '<http://www.w3.org/2000/10/swap/log#callWithCleanup>'(A, B)), D),
-        istep('<>', C, '<http://www.w3.org/2000/10/swap/log#callWithCleanup>'(A, B), D)
-    ).
+    call_cleanup(A, B).
 
 '<http://www.w3.org/2000/10/swap/log#callWithOptional>'(A, B) :-
     call(A),
     (   \+catch(call(B), _, fail)
     ->  true
-    ;   catch(call(B), _, fail),
-        (   flag(nope)
-        ->  true
-        ;   conj_append(A, B, C),
-            copy_term_nat('<http://www.w3.org/2000/10/swap/log#implies>'(C, '<http://www.w3.org/2000/10/swap/log#callWithOptional>'(A, B)), D),
-            istep('<>', C, '<http://www.w3.org/2000/10/swap/log#callWithOptional>'(A, B), D)
-        )
+    ;   catch(call(B), _, fail)
     ).
 
-'<http://www.w3.org/2000/10/swap/log#collectAllIn>'(B, A) :-
-    \+flag(restricted),
-    nonvar(A),
-    A \= [_, _],
-    !,
-    when(
-        (   nonvar(B)
-        ),
-        (   reset_gensym,
-            tmp_file(Tmp1),
-            open(Tmp1, write, Ws1, [encoding(utf8)]),
-            tell(Ws1),
-            (   flag('no-qnames')
-            ->  true
-            ;   forall(
-                    pfx(C, D),
-                    format('@prefix ~w ~w.~n', [C, D])
-                ),
-                nl
-            ),
-            labelvars(A, 0, _),
-            wt(A),
-            write('.'),
-            nl,
-            told,
-            (   flag('output', Output)
-            ->  tell(Output)
-            ;   true
-            ),
-            tmp_file(Tmp2),
-            open(Tmp2, write, Ws2, [encoding(utf8)]),
-            tell(Ws2),
-            (   flag('no-qnames')
-            ->  true
-            ;   forall(
-                    pfx(E, F),
-                    format('@prefix ~w ~w.~n', [E, F])
-                ),
-                nl
-            ),
-            write('{'),
-            wt('<http://www.w3.org/2000/10/swap/log#collectAllIn>'(B, _)),
-            write('} => {'),
-            wt('<http://www.w3.org/2000/10/swap/log#collectAllIn>'(B, _)),
-            write('}.'),
-            nl,
-            told,
-            (   flag('output', Output)
-            ->  tell(Output)
-            ;   true
-            ),
-            tmp_file(Tmp3),
-            !,
-            (   current_prolog_flag(windows, true)
-            ->  A1 = ['cmd.exe', '/C']
-            ;   A1 = []
-            ),
-            (   current_prolog_flag(argv, Argv),
-                append(Argu, ['--'|_], Argv)
-            ->  append(Argu, ['--'], A2)
-            ;   A2 = ['eye']
-            ),
-            (   flag(quiet)
-            ->  Quiet = '--quiet'
-            ;   Quiet = ''
-            ),
-            append([A1, A2, ['--nope', Quiet, Tmp1, '--query', Tmp2, '>', Tmp3]], A4),
-            findall([G, ' '],
-                (   member(G, A4)
-                ),
-                H
-            ),
-            flatten(H, I),
-            atomic_list_concat(I, J),
-            (   catch(exec(J, _), _, fail)
-            ->  n3_n3p(Tmp3, semantics),
-                absolute_uri(Tmp3, Tmp),
-                atomic_list_concat(['<', Tmp, '>'], Res),
-                semantics(Res, L),
-                conj_list(K, L),
-                labelvars(K, 0, _),
-                B = [_, _, M],
-                K = '<http://www.w3.org/2000/10/swap/log#collectAllIn>'([_, _, M], _),
-                delete_file(Tmp1),
-                delete_file(Tmp2),
-                delete_file(Tmp3)
-            ;   delete_file(Tmp1),
-                delete_file(Tmp2),
-                delete_file(Tmp3),
-                fail
-            )
-        )
-    ).
 '<http://www.w3.org/2000/10/swap/log#collectAllIn>'([A, B, C], Sc) :-
     within_scope(Sc),
     nonvar(B),
     \+is_list(B),
     catch(findall(A, B, E), _, E = []),
-    (   flag(warn)
-    ->  copy_term_nat([A, B, E], [Ac, Bc, Ec]),
-        labelvars([Ac, Bc, Ec], 0, _),
-        (   fact('<http://www.w3.org/2000/10/swap/log#collectAllIn>'([Ac, Bc, G], Sc))
-        ->  (   E \= G
-            ->  format(user_error, '** WARNING ** conflicting_collectAllIn_answers ~w VERSUS ~w~n', [[A, B, G], [A, B, E]]),
-                flush_output(user_error)
-            ;   true
-            )
-        ;   assertz(fact('<http://www.w3.org/2000/10/swap/log#collectAllIn>'([Ac, Bc, Ec], Sc)))
-        )
-    ;   true
-    ),
     E = C.
-
-'<http://www.w3.org/2000/10/swap/log#conclusion>'(A, B) :-
-    when(
-        (   nonvar(A)
-        ),
-        (   reset_gensym,
-            tmp_file(Tmp1),
-            open(Tmp1, write, Ws1, [encoding(utf8)]),
-            tell(Ws1),
-            (   flag('no-qnames')
-            ->  true
-            ;   forall(
-                    pfx(C, D),
-                    format('@prefix ~w ~w.~n', [C, D])
-                ),
-                nl
-            ),
-            labelvars(A, 0, _),
-            wt(A),
-            write('.'),
-            nl,
-            told,
-            (   flag('output', Output)
-            ->  tell(Output)
-            ;   true
-            ),
-            tmp_file(Tmp2),
-            !,
-            (   current_prolog_flag(windows, true)
-            ->  A1 = ['cmd.exe', '/C']
-            ;   A1 = []
-            ),
-            (   current_prolog_flag(argv, Argv),
-                append(Argu, ['--'|_], Argv)
-            ->  append(Argu, ['--'], A2)
-            ;   A2 = ['eye']
-            ),
-            (   flag(quiet)
-            ->  Quiet = '--quiet'
-            ;   Quiet = ''
-            ),
-            append([A1, A2, ['--nope', Quiet, Tmp1, '--pass-all', '>', Tmp2]], A4),
-            findall([G, ' '],
-                (   member(G, A4)
-                ),
-                H
-            ),
-            flatten(H, I),
-            atomic_list_concat(I, J),
-            (   catch(exec(J, _), _, fail)
-            ->  n3_n3p(Tmp2, semantics),
-                absolute_uri(Tmp2, Tmp),
-                atomic_list_concat(['<', Tmp, '>'], Res),
-                semantics(Res, L),
-                conj_list(B, L),
-                labelvars(B, 0, _),
-                delete_file(Tmp1),
-                delete_file(Tmp2)
-            ;   delete_file(Tmp1),
-                delete_file(Tmp2),
-                fail
-            )
-        )
-    ).
 
 '<http://www.w3.org/2000/10/swap/log#conjunction>'(A, B) :-
     when(
@@ -2737,11 +1709,6 @@ djiti_assertz(A) :-
             unify(M, B)
         )
     ).
-
-'<http://www.w3.org/2000/10/swap/log#content>'(A, B) :-
-    \+flag(restricted),
-    '<http://www.w3.org/2000/10/swap/log#semantics>'(A, C),
-    '<http://www.w3.org/2000/10/swap/log#n3String>'(C, B).
 
 '<http://www.w3.org/2000/10/swap/log#copy>'(X, Y) :-
     copy_term_nat(X, Y).
@@ -2803,99 +1770,6 @@ djiti_assertz(A) :-
         )
     ).
 
-'<http://www.w3.org/2000/10/swap/log#ifThenElseIn>'(A, B) :-
-    \+flag(restricted),
-    nonvar(B),
-    B \= [_, _],
-    !,
-    when(
-        (   nonvar(A)
-        ),
-        (   reset_gensym,
-            tmp_file(Tmp1),
-            open(Tmp1, write, Ws1, [encoding(utf8)]),
-            tell(Ws1),
-            (   flag('no-qnames')
-            ->  true
-            ;   forall(
-                    pfx(C, D),
-                    format('@prefix ~w ~w.~n', [C, D])
-                ),
-                nl
-            ),
-            labelvars(B, 0, _),
-            wt(B),
-            write('.'),
-            nl,
-            told,
-            (   flag('output', Output)
-            ->  tell(Output)
-            ;   true
-            ),
-            tmp_file(Tmp2),
-            open(Tmp2, write, Ws2, [encoding(utf8)]),
-            tell(Ws2),
-            (   flag('no-qnames')
-            ->  true
-            ;   forall(
-                    pfx(E, F),
-                    format('@prefix ~w ~w.~n', [E, F])
-                ),
-                nl
-            ),
-            write('{'),
-            wt('<http://www.w3.org/2000/10/swap/log#ifThenElseIn>'(A, _)),
-            write('} => {'),
-            wt('<http://www.w3.org/2000/10/swap/log#ifThenElseIn>'(A, _)),
-            write('}.'),
-            nl,
-            told,
-            (   flag('output', Output)
-            ->  tell(Output)
-            ;   true
-            ),
-            tmp_file(Tmp3),
-            !,
-            (   current_prolog_flag(windows, true)
-            ->  A1 = ['cmd.exe', '/C']
-            ;   A1 = []
-            ),
-            (   current_prolog_flag(argv, Argv),
-                append(Argu, ['--'|_], Argv)
-            ->  append(Argu, ['--'], A2)
-            ;   A2 = ['eye']
-            ),
-            (   flag(quiet)
-            ->  Quiet = '--quiet'
-            ;   Quiet = ''
-            ),
-            append([A1, A2, ['--nope', Quiet, Tmp1, '--query', Tmp2, '>', Tmp3]], A4),
-            findall([G, ' '],
-                (   member(G, A4)
-                ),
-                H
-            ),
-            flatten(H, I),
-            atomic_list_concat(I, J),
-            (   catch(exec(J, _), _, fail)
-            ->  n3_n3p(Tmp3, semantics),
-                absolute_uri(Tmp3, Tmp),
-                atomic_list_concat(['<', Tmp, '>'], Res),
-                semantics(Res, L),
-                conj_list(K, L),
-                labelvars(K, 0, _),
-                A = M,
-                K = '<http://www.w3.org/2000/10/swap/log#ifThenElseIn>'(M, _),
-                delete_file(Tmp1),
-                delete_file(Tmp2),
-                delete_file(Tmp3)
-            ;   delete_file(Tmp1),
-                delete_file(Tmp2),
-                delete_file(Tmp3),
-                fail
-            )
-        )
-    ).
 '<http://www.w3.org/2000/10/swap/log#ifThenElseIn>'([A, B, C], Sc) :-
     within_scope(Sc),
     when(
@@ -2919,28 +1793,6 @@ djiti_assertz(A) :-
     ->  true
     ;   B \= answer(_, _, _),
         B \= (answer(_, _, _), _)
-    ).
-
-'<http://www.w3.org/2000/10/swap/log#imports>'(_, X) :-
-    \+flag(restricted),
-    when(
-        (   nonvar(X)
-        ),
-        (   (   scope(X)
-            ->  true
-            ;   sub_atom(X, 0, 1, _, '<'),
-                sub_atom(X, _, 1, 0, '>'),
-                sub_atom(X, 1, _, 1, Z),
-                catch(
-                    args([Z]),
-                    Exc,
-                    (   format(user_error, '** ERROR ** ~w **~n', [Exc]),
-                        flush_output(user_error),
-                        fail
-                    )
-                )
-            )
-        )
     ).
 
 '<http://www.w3.org/2000/10/swap/log#includes>'(X, Y) :-
@@ -2999,13 +1851,6 @@ djiti_assertz(A) :-
 
 '<http://www.w3.org/2000/10/swap/log#langlit>'([literal(A, type('<http://www.w3.org/2001/XMLSchema#string>')), literal(B, type('<http://www.w3.org/2001/XMLSchema#string>'))], literal(A, lang(B))).
 
-'<http://www.w3.org/2000/10/swap/log#localN3String>'(A, literal(B, type('<http://www.w3.org/2001/XMLSchema#string>'))) :-
-    term_variables(A, V),
-    labelvars([A, V], 0, _, avar),
-    with_output_to_chars((wq(V, allv), wt(A)), E),
-    escape_string(E, F),
-    atom_codes(B, F).
-
 '<http://www.w3.org/2000/10/swap/log#localName>'(A, literal(B, type('<http://www.w3.org/2001/XMLSchema#string>'))) :-
     when(
         (   nonvar(A)
@@ -3021,21 +1866,6 @@ djiti_assertz(A) :-
                 sub_atom(C, _, N, 0, B)
             )
         )
-    ).
-
-'<http://www.w3.org/2000/10/swap/log#n3String>'(A, literal(B, type('<http://www.w3.org/2001/XMLSchema#string>'))) :-
-    (   n3s(A, literal(B, type('<http://www.w3.org/2001/XMLSchema#string>')))
-    ->  true
-    ;   retractall(wpfx(_)),
-        with_output_to_chars(wh, C1),
-        retractall(wpfx(_)),
-        \+ (C1 = [], \+flag('no-qnames')),
-        numbervars(A),
-        with_output_to_chars(wt(A), C2),
-        append(C1, C2, C),
-        escape_string(C, D),
-        atom_codes(B, D),
-        assertz(n3s(A, literal(B, type('<http://www.w3.org/2001/XMLSchema#string>'))))
     ).
 
 '<http://www.w3.org/2000/10/swap/log#namespace>'(A, literal(B, type('<http://www.w3.org/2001/XMLSchema#string>'))) :-
@@ -3096,26 +1926,6 @@ djiti_assertz(A) :-
 '<http://www.w3.org/2000/10/swap/log#notIsomorphic>'(X, Y) :-
     \+'<http://www.w3.org/2000/10/swap/log#isomorphic>'(X, Y).
 
-'<http://www.w3.org/2000/10/swap/log#parsedAsN3>'(literal(A, _), B) :-
-    (   parsed_as_n3(A, B)
-    ->  true
-    ;   atom_codes(A, C),
-        escape_string(D, C),
-        atom_codes(E, D),
-        tmp_file(Tmp),
-        open(Tmp, write, Ws, [encoding(utf8)]),
-        tell(Ws),
-        writef(E, []),
-        told,
-        (   flag('output', Output)
-        ->  tell(Output)
-        ;   true
-        ),
-        atomic_list_concat(['<file://', Tmp, '>'], F),
-        '<http://www.w3.org/2000/10/swap/log#semantics>'(F, B),
-        assertz(parsed_as_n3(A, B))
-    ).
-
 '<http://www.w3.org/2000/10/swap/log#phrase>'([literal(A, type('<http://www.w3.org/2001/XMLSchema#string>'))|B], C) :-
     read_term_from_atom(A, D, [variables(B)]),
     findall(E,
@@ -3153,51 +1963,6 @@ djiti_assertz(A) :-
 '<http://www.w3.org/2000/10/swap/log#repeat>'(A, B) :-
     C is A-1,
     between(0, C, B).
-
-'<http://www.w3.org/2000/10/swap/log#semantics>'(X, Y) :-
-    \+flag(restricted),
-    when(
-        (   nonvar(X)
-        ),
-        (   (   semantics(X, L)
-            ->  conj_list(Y, L)
-            ;   sub_atom(X, 0, 1, _, '<'),
-                sub_atom(X, _, 1, 0, '>'),
-                sub_atom(X, 1, _, 1, Z),
-                catch(
-                    n3_n3p(Z, semantics),
-                    Exc,
-                    (   format(user_error, '** ERROR ** ~w **~n', [Exc]),
-                        flush_output(user_error),
-                        fail
-                    )
-                ),
-                semantics(X, L),
-                conj_list(Y, L)
-            )
-        )
-    ).
-
-'<http://www.w3.org/2000/10/swap/log#semanticsOrError>'(X, Y) :-
-    \+flag(restricted),
-    when(
-        (   nonvar(X)
-        ),
-        (   (   semantics(X, L)
-            ->  conj_list(Y, L)
-            ;   sub_atom(X, 0, 1, _, '<'),
-                sub_atom(X, _, 1, 0, '>'),
-                sub_atom(X, 1, _, 1, Z),
-                catch(
-                    n3_n3p(Z, semantics),
-                    Exc,
-                    assertz(semantics(X, [literal(Exc, type('<http://www.w3.org/2001/XMLSchema#string>'))]))
-                ),
-                semantics(X, L),
-                conj_list(Y, L)
-            )
-        )
-    ).
 
 '<http://www.w3.org/2000/10/swap/log#skolem>'(Y, X) :-
     when(
@@ -4173,24 +2938,12 @@ fresh_pf(_, Pfx) :-
 cnt(A) :-
     nb_getval(A, B),
     C is B+1,
-    nb_setval(A, C),
-    (   flag('debug-cnt'),
-        C mod 10000 =:= 0
-    ->  format(user_error, '~w = ~w~n', [A, C]),
-        flush_output(user_error)
-    ;   true
-    ).
+    nb_setval(A, C).
 
 cnt(A, I) :-
     nb_getval(A, B),
     C is B+I,
-    nb_setval(A, C),
-    (   flag('debug-cnt'),
-        C mod 10000 =:= 0
-    ->  format(user_error, '~w = ~w~n', [A, C]),
-        flush_output(user_error)
-    ;   true
-    ).
+    nb_setval(A, C).
 
 within_scope([A, B]) :-
     (   var(B)
@@ -4700,17 +3453,10 @@ tmp_file(A) :-
     (   current_prolog_flag(dialect, swi),
         current_prolog_flag(windows, true),
         current_prolog_flag(pid, B)
-    ->  atomic_list_concat(['pl_eye_', B, '_'], C)
-    ;   C = 'eye'
+    ->  atomic_list_concat(['pl_see_', B, '_'], C)
+    ;   C = 'see'
     ),
     tmp_file(C, A).
-
-exec(A, B) :-
-    shell(A, B),
-    (   B =:= 0
-    ->  true
-    ;   throw(exec_error(A))
-    ).
 
 %
 % Modified Base64 for XML identifiers
@@ -4744,20 +3490,7 @@ inv(true, false).
     ->  Ax =.. [P, S, O]
     ;   Ax = A
     ),
-    clause(Ax, D),
-    (   \+flag(nope),
-        (   D = when(H, I)
-        ->  conj_append(J, istep(Src, _, _, _), I),
-            B = when(H, J)
-        ;   conj_append(B, istep(Src, _, _, _), D)
-        )
-    ->  term_index(true, Pnd),
-        (   \+prfstep(':-'(Ax, B), true, Pnd, ':-'(Ax, B), _, forward, Src)
-        ->  assertz(prfstep(':-'(Ax, B), true, Pnd, ':-'(Ax, B), _, forward, Src))
-        ;   true
-        )
-    ;   D = B
-    ).
+    clause(Ax, B).
 
 sub_atom_last(A, B, C, D, E) :-
     sub_atom(A, B, C, D, E),
