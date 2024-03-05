@@ -11,17 +11,15 @@
 :- use_module(library(terms)).
 :- use_module(library(url)).
 :- use_module(library(charsio)).
-:- use_module(library(qsave)).
 :- use_module(library(base64)).
 :- use_module(library(date)).
-:- use_module(library(prolog_jiti)).
 :- use_module(library(sha)).
 :- use_module(library(dif)).
-:- use_module(library(semweb/turtle)).
 :- use_module(library(pcre)).
+:- use_module(library(semweb/turtle)).
 :- catch(use_module(library(http/http_open)), _, true).
 
-version_info('SEE v0.0.4 (2024-03-05)').
+version_info('SEE v0.0.5 (2024-03-05)').
 
 help_info('Usage: see <options>* <data>*
 see
@@ -38,56 +36,28 @@ see
 :- dynamic(answer/3).               % answer(Predicate, Subject, Object)
 :- dynamic(apfx/2).
 :- dynamic(base_uri/1).
-:- dynamic(bcnd/2).
-:- dynamic(bgot/3).
 :- dynamic(brake/0).
-:- dynamic(bref/2).
-:- dynamic(bvar/1).
 :- dynamic(cc/1).
 :- dynamic(cpred/1).
-:- dynamic(data_fuse/0).
-:- dynamic(evar/3).
 :- dynamic(exopred/3).              % exopred(Predicate, Subject, Object)
-:- dynamic(fact/1).
-:- dynamic(flag/1).
 :- dynamic(flag/2).
 :- dynamic(fpred/1).
-:- dynamic(got_cs/1).
-:- dynamic(got_dq/0).
-:- dynamic(got_head/0).
-:- dynamic(got_labelvars/3).
-:- dynamic(got_pi/0).
-:- dynamic(got_random/3).
-:- dynamic(got_sq/0).
-:- dynamic(got_unique/2).
-:- dynamic(got_wi/5).               % got_wi(Source, Premise, Premise_index, Conclusion, Rule)
 :- dynamic(graph/2).
 :- dynamic(hash_value/2).
 :- dynamic(implies/3).              % implies(Premise, Conclusion, Source)
-:- dynamic(intern/1).
 :- dynamic(keep_ng/1).
 :- dynamic(keep_skolem/1).
 :- dynamic(mtime/2).
-:- dynamic(n3s/2).
 :- dynamic(ncllit/0).
-:- dynamic(nonl/0).
 :- dynamic(ns/2).
-:- dynamic(parsed_as_n3/2).
-:- dynamic(pass_only_new/1).
 :- dynamic(pfx/2).
 :- dynamic(pred/1).
-:- dynamic(prfstep/7).              % prfstep(Conclusion_triple, Premise, Premise_index, Conclusion, Rule, Chaining, Source)
-:- dynamic(qevar/3).
 :- dynamic(quad/2).
 :- dynamic(query/2).
-:- dynamic(quvar/3).
 :- dynamic(recursion/1).
 :- dynamic(retwist/3).
 :- dynamic(rule_uvar/1).
 :- dynamic(scope/1).
-:- dynamic(scount/1).
-:- dynamic(tabl/3).
-:- dynamic(tmpfile/1).
 :- dynamic(tuple/2).
 :- dynamic(tuple/3).
 :- dynamic(tuple/4).
@@ -115,7 +85,6 @@ see
 :- dynamic('<http://www.w3.org/2000/10/swap/log#collectAllIn>'/2).
 :- dynamic('<http://www.w3.org/2000/10/swap/log#implies>'/2).
 :- dynamic('<http://www.w3.org/2000/10/swap/log#outputString>'/2).
-:- dynamic('<http://www.w3.org/2000/10/swap/reason#source>'/2).
 
 %
 % Main goal
@@ -147,16 +116,7 @@ run :-
     ->  true
     ;   Argvp = Argv
     ),
-    (   Argvp = ['--source', File]
-    ->  (   File = '-'
-        ->  read_line_to_codes(user_input, Codes)
-        ;   read_file_to_codes(File, Codes, [])
-        ),
-        atom_codes(Atom, Codes),
-        atomic_list_concat(Argvs, ' ', Atom)
-    ;   Argvs = Argvp
-    ),
-    argv(Argvs, Argus),
+    argv(Argvp, Argus),
     catch(gre(Argus), Exc,
         (   Exc = halt(0)
         ->  true
@@ -199,11 +159,9 @@ argv([Arg|Argvs], [Arg|Argus]) :-
 % ------------------------------
 
 gre(Argus) :-
-    nb_setval(entail_mode, false),
     nb_setval(exit_code, 0),
     nb_setval(indentation, 0),
     nb_setval(limit, -1),
-    nb_setval(tabl, -1),
     nb_setval(tuple, -1),
     nb_setval(fdepth, 0),
     nb_setval(pdepth, 0),
@@ -326,10 +284,6 @@ gre(Argus) :-
         Scope
     ),
     nb_setval(scope, Scope),
-    (   pfx('r:', _)
-    ->  true
-    ;   assertz(pfx('r:', '<http://www.w3.org/2000/10/swap/reason#>'))
-    ),
     (   pfx('var:', _)
     ->  true
     ;   assertz(pfx('var:', '<http://www.w3.org/2000/10/swap/var#>'))
@@ -455,52 +409,52 @@ args([Argument|Args]) :-
     put_pfx('', D),
     forall(
         member(rdf(S, P, O), Triples),
-        (   trig_n3p(S, Subject),
-            trig_n3p(P, Predicate),
-            trig_n3p(O, Object),
+        (   trig_term(S, Subject),
+            trig_term(P, Predicate),
+            trig_term(O, Object),
             Triple =.. [Predicate, Subject, Object],
             djiti_assertz(Triple)
         )
     ),
     forall(
         member(rdf(S, P, O, G), Triples),
-        (   trig_n3p(S, Subject),
-            trig_n3p(P, Predicate),
-            trig_n3p(O, Object),
+        (   trig_term(S, Subject),
+            trig_term(P, Predicate),
+            trig_term(O, Object),
             G = H:_,
-            trig_n3p(H, Graph),
+            trig_term(H, Graph),
             assertz(quad(triple(Subject, Predicate, Object), Graph))
         )
     ),
     args(Args).
 
-trig_n3p(literal(type(A, B)), C) :-
+trig_term(literal(type(A, B)), C) :-
     memberchk(A, ['http://www.w3.org/2001/XMLSchema#integer', 'http://www.w3.org/2001/XMLSchema#long', 'http://www.w3.org/2001/XMLSchema#decimal', 'http://www.w3.org/2001/XMLSchema#double']),
     atom_number(B, C),
     !.
-trig_n3p(literal(type('http://www.w3.org/2001/XMLSchema#boolean', A)), A) :-
+trig_term(literal(type('http://www.w3.org/2001/XMLSchema#boolean', A)), A) :-
     !.
-trig_n3p(literal(type(A, B)), literal(E, type(F))) :-
+trig_term(literal(type(A, B)), literal(E, type(F))) :-
     atom_codes(B, C),
     escape_string(C, D),
     atom_codes(E, D),
     atomic_list_concat(['<', A, '>'], F),
     !.
-trig_n3p(literal(lang(A, B)), literal(E, lang(A))) :-
+trig_term(literal(lang(A, B)), literal(E, lang(A))) :-
     atom_codes(B, C),
     escape_string(C, D),
     atom_codes(E, D),
     !.
-trig_n3p(literal(A), literal(E, type('<http://www.w3.org/2001/XMLSchema#string>'))) :-
+trig_term(literal(A), literal(E, type('<http://www.w3.org/2001/XMLSchema#string>'))) :-
     atom_codes(A, C),
     escape_string(C, D),
     atom_codes(E, D),
     !.
-trig_n3p(node(A), B) :-
+trig_term(node(A), B) :-
     !,
     nb_getval(var_ns, Sns),
     atomic_list_concat(['<', Sns, 'node_', A, '>'], B).
-trig_n3p(A, B) :-
+trig_term(A, B) :-
     atomic_list_concat(['<', A, '>'], B).
 
 rename('\'<http://www.w3.org/1999/02/22-rdf-syntax-ns#nil>\'', []) :-
@@ -551,8 +505,7 @@ wh :-
             nb_setval(wpfx, true)
         )
     ),
-    (   \+ (flag('pass-only-new'), flag(nope)),
-        nb_getval(wpfx, true)
+    (   nb_getval(wpfx, true)
     ->  nl
     ;   true
     ).
@@ -2957,7 +2910,6 @@ def_pfx('math:', '<http://www.w3.org/2000/10/swap/math#>').
 def_pfx('list:', '<http://www.w3.org/2000/10/swap/list#>').
 def_pfx('xsd:', '<http://www.w3.org/2001/XMLSchema#>').
 def_pfx('log:', '<http://www.w3.org/2000/10/swap/log#>').
-def_pfx('r:', '<http://www.w3.org/2000/10/swap/reason#>').
 def_pfx('rdfs:', '<http://www.w3.org/2000/01/rdf-schema#>').
 def_pfx('time:', '<http://www.w3.org/2000/10/swap/time#>').
 def_pfx('rdf:', '<http://www.w3.org/1999/02/22-rdf-syntax-ns#>').
@@ -3097,10 +3049,6 @@ is_gl(A) :-
     ;   A = exopred(_, _, _)
     ).
 
-is_graph(true).
-is_graph(A) :-
-    is_gl(A).
-
 unify(A, B) :-
     nonvar(A),
     A = exopred(P, S, O),
@@ -3186,23 +3134,6 @@ conj_append((A, B), C, (A, D)) :-
     !.
 conj_append(A, B, (A, B)).
 
-cflat([], []).
-cflat([A|B], C) :-
-    cflat(B, D),
-    copy_term_nat(A, E),
-    (   E = (_, _),
-        conj_list(E, F)
-    ->  append(F, D, C)
-    ;   (   E = true
-        ->  C = D
-        ;   C = [E|D]
-        )
-    ).
-
-couple([], [], []).
-couple([A|B], [C|D], [[A, C]|E]) :-
-    couple(B, D, E).
-
 relist([], []).
 relist(['<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>'(A, B)|C], D) :-
     !,
@@ -3281,11 +3212,6 @@ intersect([X|Y], U, V) :-
 intersect([_|Y], U, V) :-
     intersect(Y, U, V).
 
-cartesian([], []).
-cartesian([A|B], [C|D]) :-
-    member(C, A),
-    cartesian(B, D).
-
 distinct(A, B) :-
     (   ground(A)
     ->  distinct_hash(A, B)
@@ -3299,7 +3225,7 @@ distinct_hash([], []) :-
     ),
     !.
 distinct_hash([A|B], C) :-
-    term_index(A, D),
+    term_hash(A, D),
     (   hash_value(D, E)
     ->  (   unify(A, E)
         ->  C = F
@@ -3365,21 +3291,6 @@ srlist([A|B], C, [[E, C]|D]) :-
     string_codes(A, E),
     srlist(B, C, D).
 
-quicksort([], []).
-quicksort([A|B], C) :-
-    split(A, B, D, E),
-    quicksort(D, F),
-    quicksort(E, G),
-    append(F, [A|G], C).
-
-split(_, [], [], []).
-split(A, [B|C], [B|D], E) :-
-    sort([A, B], [B, A]),
-    !,
-    split(A, C, D, E).
-split(A, [B|C], D, [B|E]) :-
-    split(A, C, D, E).
-
 zip_list([], [], []).
 zip_list([A|B], [C|D], [[E,C]|F]) :-
     (   atom_concat('avar', G, A)
@@ -3387,32 +3298,6 @@ zip_list([A|B], [C|D], [[E,C]|F]) :-
     ;   E = A
     ),
     zip_list(B, D, F).
-
-sub_list(A, A) :-
-    !.
-sub_list([A|B], C) :-
-    sub_list(B, A, C).
-
-sub_list(A, _, A) :-
-    !.
-sub_list([A|B], C, [C|D]) :-
-    !,
-    sub_list(B, A, D).
-sub_list([A|B], _, C) :-
-    sub_list(B, A, C).
-
-e_transpose([], []).
-e_transpose([A|B], C) :-
-    e_transpose(A, [A|B], C).
-
-e_transpose([], _, []).
-e_transpose([_|A], B, [C|D]) :-
-    lists_fr(B, C, E),
-    e_transpose(A, E, D).
-
-lists_fr([], [], []).
-lists_fr([[A|B]|C], [A|D], [B|E]) :-
-    lists_fr(C, D, E).
 
 sum([], 0) :-
     !.
@@ -3428,80 +3313,6 @@ product([A|B], C) :-
     product(B, D),
     C is X*D.
 
-avg(A, B) :-
-    sum(A, As),
-    length(A, An),
-    B is As/An.
-
-cov([A, B], C) :-
-    avg(A, Am),
-    avg(B, Bm),
-    cov1(A, B, Am, Bm, Cp),
-    length(A, An),
-    C is Cp/(An-1).
-
-cov1([], [], _, _, 0).
-cov1([A|B], [C|D], E, F, G) :-
-    cov1(B, D, E, F, H),
-    getnumber(A, I),
-    getnumber(C, J),
-    G is (I-E)*(J-F)+H.
-
-pcc([A, B], C) :-
-    avg(A, Am),
-    avg(B, Bm),
-    cov1(A, B, Am, Bm, Cp),
-    std1(A, Am, Ap),
-    std1(B, Bm, Bp),
-    C is Cp/sqrt(Ap*Bp).
-
-rms(A, B) :-
-    rms1(A, Ar),
-    length(A, An),
-    B is sqrt(Ar/An).
-
-rms1([], 0).
-rms1([A|B], C) :-
-    rms1(B, D),
-    getnumber(A, E),
-    C is E^2+D.
-
-std(A, B) :-
-    avg(A, Am),
-    std1(A, Am, As),
-    length(A, An),
-    B is sqrt(As/(An-1)).
-
-std1([], _, 0).
-std1([A|B], C, D) :-
-    std1(B, C, E),
-    getnumber(A, F),
-    D is (F-C)^2+E.
-
-bmax([A|B], C) :-
-    bmax(B, A, C).
-
-bmax([], A, A).
-bmax([A|B], C, D) :-
-    getnumber(A, X),
-    getnumber(C, Y),
-    (   X > Y
-    ->  bmax(B, A, D)
-    ;   bmax(B, C, D)
-    ).
-
-bmin([A|B], C) :-
-    bmin(B, A, C).
-
-bmin([], A, A).
-bmin([A|B], C, D) :-
-    getnumber(A, X),
-    getnumber(C, Y),
-    (   X < Y
-    ->  bmin(B, A, D)
-    ;   bmin(B, C, D)
-    ).
-
 tmp_file(A) :-
     (   current_prolog_flag(dialect, swi),
         current_prolog_flag(windows, true),
@@ -3511,27 +3322,11 @@ tmp_file(A) :-
     ),
     tmp_file(C, A).
 
-%
-% Modified Base64 for XML identifiers
-%
-
-base64xml(A, B) :-
-    base64(A, C),
-    atom_codes(C, D),
-    subst([[[0'+], [0'_]], [[0'/], [0':]], [[0'=], []]], D, E),
-    atom_codes(B, E).
-
-term_index(A, B) :-
-    term_hash(A, B).
-
 if_then_else(A, B, C) :-
     (   catch(call(A), _, fail)
     ->  catch(call(B), _, fail)
     ;   catch(call(C), _, fail)
     ).
-
-inv(false, true).
-inv(true, false).
 
 ':-'(A, B) :-
     (   var(A)
@@ -3553,18 +3348,6 @@ sub_atom_last(A, B, C, D, E) :-
     ->  sub_atom_last(G, B, C, D, E)
     ;   true
     ).
-
-lookup(A, B, C) :-
-    tabl(A, B, C),
-    !.
-lookup(A, B, C) :-
-    var(A),
-    nb_getval(tabl, M),
-    N is M+1,
-    nb_setval(tabl, N),
-    atom_number(I, N),
-    atomic_list_concat([B, '_tabl_entry_', I], A),
-    assertz(tabl(A, B, C)).
 
 escape_string([], []) :-
     !.
@@ -3591,14 +3374,6 @@ escape_string([0'\\|A], [0'\\, 0'\\|B]) :-
     escape_string(A, B).
 escape_string([A|B], [A|C]) :-
     escape_string(B, C).
-
-escape_squote([], []) :-
-    !.
-escape_squote([0''|A], [0'\\, 0''|B]) :-
-    !,
-    escape_squote(A, B).
-escape_squote([A|B], [A|C]) :-
-    escape_squote(B, C).
 
 escape_unicode([], []) :-
     !.
@@ -3767,33 +3542,6 @@ commonvars(A, B, C) :-
         C
     ).
 
-getvars(A, B) :-
-    findvars(A, C, alpha),
-    distinct(C, B).
-
-makeblank(A, B) :-
-    findvars(A, C, beta),
-    distinct(C, D),
-    findall([F, E],
-        (   member(F, D),
-            (   sub_atom(F, _, 19, _, '/.well-known/genid/'),
-                sub_atom(F, _, 1, G, '#')
-            ->  H is G-1,
-                sub_atom(F, _, H, 1, I),
-                (   sub_atom(F, _, 3, _, '#t_')
-                ->  E = F
-                ;   atom_concat('_:', I, E)
-                )
-            ;   (   sub_atom(F, 0, 2, _, '_:')
-                ->  E = F
-                ;   atom_concat('_:', F, E)
-                )
-            )
-        ),
-        J
-    ),
-    makevar(A, B, J).
-
 makevars(A, B, beta(C)) :-
     !,
     distinct(C, D),
@@ -3862,26 +3610,6 @@ findvars([A|B], C, Z) :-
 findvars(A, B, Z) :-
     A =.. C,
     findvars(C, B, Z).
-
-shallowvars(A, B, Z) :-
-    atomic(A),
-    !,
-    (   atom(A),
-        findvar(A, Z)
-    ->  B = [A]
-    ;   B = []
-    ).
-shallowvars(A, [], _) :-
-    var(A),
-    !.
-shallowvars([], [], _) :-
-    !.
-shallowvars([A|B], C, Z) :-
-    shallowvars(A, D, Z),
-    shallowvars(B, E, Z),
-    append(D, E, C),
-    !.
-shallowvars(_, [], _).
 
 findvar(A, alpha) :-
     !,
@@ -4141,13 +3869,6 @@ getcodes(A, B) :-
     nonvar(A),
     with_output_to_chars(wg(A), B).
 
-map(_, [], []) :-
-    !.
-map(A, [B|C], [D|E]) :-
-    F =.. [A, B, D],
-    call(F),
-    map(A, C, E).
-
 remember(A) :-
     \+call(A),
     !,
@@ -4181,16 +3902,6 @@ numeral(A, B) :-
     append(A, [0'0], B),
     !.
 numeral(A, A).
-
-rdiv_codes(rdiv(A, B), C) :-
-    append(D, [0'.|E], C),
-    append(D, E, F),
-    number_codes(A, F),
-    lzero(E, G),
-    number_codes(B, [0'1|G]),
-    !.
-rdiv_codes(rdiv(A, 1), C) :-
-    number_codes(A, C).
 
 lzero([], []) :-
     !.
@@ -4264,14 +3975,6 @@ dtlit([literal(A, type('<http://www.w3.org/2001/XMLSchema#string>')), prolog:ato
 dtlit([literal(A, type('<http://www.w3.org/2001/XMLSchema#string>')), '<http://www.w3.org/1999/02/22-rdf-syntax-ns#langString>'], literal(A, lang(_))) :-
     !.
 dtlit([literal(A, type('<http://www.w3.org/2001/XMLSchema#string>')), B], literal(A, type(B))).
-
-hash_to_ascii([], L1, L1).
-hash_to_ascii([A|B], [C, D|L3], L4) :-
-    E is A>>4 /\ 15,
-    F is A /\ 15,
-    code_type(C, xdigit(E)),
-    code_type(D, xdigit(F)),
-    hash_to_ascii(B, L3, L4).
 
 memotime(datime(A, B, C, D, E, F), G) :-
     (   mtime(datime(A, B, C, D, E, F), G)
