@@ -21,7 +21,7 @@
 :- use_module(library(pcre)).
 :- catch(use_module(library(http/http_open)), _, true).
 
-version_info('SEE v0.0.3 (2024-03-05)').
+version_info('SEE v0.0.4 (2024-03-05)').
 
 help_info('Usage: see <options>* <data>*
 see
@@ -385,6 +385,9 @@ opts(['--skolem-genid', Genid|Argus], Args) :-
     opts(Argus, Args).
 opts(['--version'|_], _) :-
     !,
+    version_info(Version),
+    format(user_error, '~w~n', [Version]),
+    flush_output(user_error),
     throw(halt(0)).
 opts(['--wcache', Argument, File|Argus], Args) :-
     !,
