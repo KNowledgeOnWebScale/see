@@ -21,7 +21,7 @@
 :- use_module(library(pcre)).
 :- catch(use_module(library(http/http_open)), _, true).
 
-version_info('SEE v..1 (2024-03-05)').
+version_info('SEE v0.0.2 (2024-03-05)').
 
 help_info('Usage: see <options>* <data>*
 see

@@ -55,10 +55,9 @@ echo "${a[0]}.${a[1]}.${a[2]}" > VERSION
 export RELEASE="v$(cat VERSION)"
 export DATE="$(date -Idate)"
 
-# update version in see.pl and add release line in RELEASE
+# update version in see.pl
 cat see.pl | sed -e "s/'SEE.*'/'SEE $RELEASE \($DATE\)'/" > see.pl.tmp
 mv see.pl.tmp see.pl
-sed -i '3 i\'"$RELEASE"' '\("$DATE"\)' '"$1"'' RELEASE
 
 # run the tests
 ./test
