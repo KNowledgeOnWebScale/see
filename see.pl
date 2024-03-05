@@ -21,7 +21,7 @@
 :- use_module(library(pcre)).
 :- catch(use_module(library(http/http_open)), _, true).
 
-version_info('SEE v0.0.2 (2024-03-05)').
+version_info('SEE v0.0.3 (2024-03-05)').
 
 help_info('Usage: see <options>* <data>*
 see
@@ -536,6 +536,21 @@ wh :-
     (   keep_skolem(_)
     ->  nb_getval(var_ns, Sns),
         put_pfx('skolem', Sns)
+    ;   true
+    ),
+    nb_setval(wpfx, false),
+    forall(
+        (   pfx(A, B),
+            \+wpfx(A)
+        ),
+        (   format('@prefix ~w ~w.~n', [A, B]),
+            assertz(wpfx(A)),
+            nb_setval(wpfx, true)
+        )
+    ),
+    (   \+ (flag('pass-only-new'), flag(nope)),
+        nb_getval(wpfx, true)
+    ->  nl
     ;   true
     ).
 
@@ -1150,6 +1165,7 @@ eam(Recursion) :-
             nb_setval(wn, N)
         ;   true
         ),
+        astep(Prem, Concd),
         retract(brake),
         fail
     ;   brake,
@@ -1208,6 +1224,40 @@ eam(Recursion) :-
     ;   assertz(brake),
         exogen,
         eam(Recursion)
+    ).
+
+astep(B, Cn) :-
+    (   Cn = (Dn, En)
+    ->  functor(Dn, P, N),
+        (   \+pred(P),
+            P \= '<http://www.w3.org/2000/10/swap/log#implies>',
+            P \= '<http://www.w3.org/2000/10/swap/log#callWithCleanup>',
+            N = 2
+        ->  assertz(pred(P))
+        ;   true
+        ),
+        (   Dn \= '<http://www.w3.org/2000/10/swap/log#implies>'(_, _),
+            catch(call(Dn), _, fail)
+        ->  true
+        ;   djiti_assertz(Dn)
+        ),
+        astep(B, En)
+    ;   (   Cn = true
+        ->  true
+        ;   functor(Cn, P, N),
+            (   \+pred(P),
+                P \= '<http://www.w3.org/2000/10/swap/log#callWithCleanup>',
+                P \= '<http://www.w3.org/2000/10/swap/log#implies>',
+                N = 2
+            ->  assertz(pred(P))
+            ;   true
+            ),
+            (   Cn \= '<http://www.w3.org/2000/10/swap/log#implies>'(_, _),
+                catch(call(Cn), _, fail)
+            ->  true
+            ;   djiti_assertz(Cn)
+            )
+        )
     ).
 
 %
