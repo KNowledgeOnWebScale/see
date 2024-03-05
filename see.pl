@@ -19,32 +19,32 @@
 :- use_module(library(semweb/turtle)).
 :- catch(use_module(library(http/http_open)), _, true).
 
-version_info('SEE v0.0.6 (2024-03-06)').
+version_info('SEE v0.0.7 (2024-03-06)').
 
 help_info('Usage: see <options>* <data>*
 see
     swipl -g main see.pl --
 <options>
-    --help                          show help info
-    --output <file>                 write reasoner output to <file>
-    --skolem-genid <genid>          use <genid> in Skolem IRIs
-    --version                       show version info
-    --wcache <uri> <file>           to tell that <uri> is cached as <file>
+    --genid <genid>             use <genid> in Skolem IRIs
+    --help                      show help info
+    --output <file>             write reasoner output to <file>
+    --version                   show version info
+    --wcache <uri> <file>       to tell that <uri> is cached as <file>
 <data>
-    <uri>                           TriG data').
+    <uri>                       TriG data').
 
-:- dynamic(answer/3).               % answer(Predicate, Subject, Object)
+:- dynamic(answer/3).           % answer(Predicate, Subject, Object)
 :- dynamic(apfx/2).
 :- dynamic(base_uri/1).
 :- dynamic(brake/0).
 :- dynamic(cc/1).
 :- dynamic(cpred/1).
-:- dynamic(exopred/3).              % exopred(Predicate, Subject, Object)
+:- dynamic(exopred/3).          % exopred(Predicate, Subject, Object)
 :- dynamic(flag/2).
 :- dynamic(fpred/1).
 :- dynamic(graph/2).
 :- dynamic(hash_value/2).
-:- dynamic(implies/3).              % implies(Premise, Conclusion, Source)
+:- dynamic(implies/2).          % implies(Premise, Conclusion)
 :- dynamic(keep_ng/1).
 :- dynamic(keep_skolem/1).
 :- dynamic(mtime/2).
@@ -55,7 +55,6 @@ see
 :- dynamic(quad/2).
 :- dynamic(query/2).
 :- dynamic(recursion/1).
-:- dynamic(retwist/3).
 :- dynamic(rule_uvar/1).
 :- dynamic(scope/1).
 :- dynamic(tuple/2).
@@ -145,7 +144,7 @@ argv([], []) :-
 argv([Arg|Argvs], [U, V|Argus]) :-
     sub_atom(Arg, B, 1, E, '='),
     sub_atom(Arg, 0, B, _, U),
-    memberchk(U, ['--output', '--skolem-genid']),
+    memberchk(U, ['--output', '--genid']),
     !,
     sub_atom(Arg, _, E, 0, V),
     argv(Argvs, Argus).
@@ -172,7 +171,7 @@ gre(Argus) :-
     ->  opts(['--help'], _)
     ;   true
     ),
-    (   flag('skolem-genid', Genid)
+    (   flag('genid', Genid)
     ->  true
     ;   uuid(Genid)
     ),
@@ -231,7 +230,7 @@ gre(Argus) :-
                 conj_append(D, remember(answer('<http://www.w3.org/2000/10/swap/lingua#conclusion>', R, B)), E),
                 conj_append(E, remember(answer('<http://www.w3.org/2000/10/swap/lingua#bindings>', R, W)), F)
             ;   F = I
-            )), '<http://www.w3.org/2000/10/swap/log#implies>'(Q, F), '<>')),
+            )), '<http://www.w3.org/2000/10/swap/log#implies>'(Q, F))),
     % create backward rules
     assertz(implies((
             '<http://www.w3.org/2000/10/swap/lingua#body>'(R, A),
@@ -251,7 +250,7 @@ gre(Argus) :-
                 assertz(C),
                 retractall(brake)
             ;   true
-            )), true, '<>')),
+            )), true)),
     % create queries
     assertz(implies((
             '<http://www.w3.org/2000/10/swap/lingua#question>'(R, A),
@@ -267,7 +266,7 @@ gre(Argus) :-
             conj_append(Q, remember(answer('<http://www.w3.org/2000/10/swap/lingua#question>', R, A)), D),
             conj_append(D, remember(answer('<http://www.w3.org/2000/10/swap/lingua#answer>', R, B)), E),
             conj_append(E, remember(answer('<http://www.w3.org/2000/10/swap/lingua#bindings>', R, W)), F),
-            C = implies(F, I, '<>'),
+            C = implies(F, I),
             copy_term_nat(C, CC),
             labelvars(CC, 0, _, avar),
             (   \+cc(CC)
@@ -275,7 +274,7 @@ gre(Argus) :-
                 assertz(C),
                 retractall(brake)
             ;   true
-            )), true, '<>')),
+            )), true)),
     % set scope
     findall(Sc,
         (   scope(Sc)
@@ -314,6 +313,11 @@ gre(Argus) :-
 
 opts([], []) :-
     !.
+opts(['--genid', Genid|Argus], Args) :-
+    !,
+    retractall(flag('genid', _)),
+    assertz(flag('genid', Genid)),
+    opts(Argus, Args).
 opts(['--help'|_], _) :-
     !,
     help_info(Help),
@@ -326,11 +330,6 @@ opts(['--output', File|Argus], Args) :-
     open(File, write, Out, [encoding(utf8)]),
     tell(Out),
     assertz(flag('output', Out)),
-    opts(Argus, Args).
-opts(['--skolem-genid', Genid|Argus], Args) :-
-    !,
-    retractall(flag('skolem-genid', _)),
-    assertz(flag('skolem-genid', Genid)),
     opts(Argus, Args).
 opts(['--version'|_], _) :-
     !,
@@ -1073,7 +1072,7 @@ indentation(C) :-
 % ----------------------------
 
 eam(Recursion) :-
-    (   implies(Prem, Conc, _),
+    (   implies(Prem, Conc),
         ignore(Prem = true),
         catch(call_residue_vars(ucall(Prem), []), Exc,
             (   Exc = error(existence_error(procedure, _), _)
@@ -1242,7 +1241,7 @@ djiti_fact(answer(P, S, O), answer(P, S, O)) :-
     ->  assertz(pred(P))
     ;   true
     ).
-djiti_fact(implies(A, B, C), implies(A, B, C)) :-
+djiti_fact(implies(A, B), implies(A, B)) :-
     nonvar(B),
     conj_list(B, D),
     forall(
@@ -1273,11 +1272,7 @@ djiti_fact('<http://www.w3.org/2000/10/swap/log#implies>'(A, B), C) :-
         )
     ),
     !,
-    (   retwist(A, B, Z)
-    ->  true
-    ;   Z = '<>'
-    ),
-    makevars(implies(A, B, Z), C, zeta).
+    makevars(implies(A, B), C, zeta).
 djiti_fact(':-'(A, B), ':-'(C, D)) :-
     !,
     makevars((A, B), (C, D), eta).
@@ -1639,8 +1634,7 @@ djiti_assertz(A) :-
     forall(
         member(E, D),
         (   (   E = '<http://www.w3.org/2000/10/swap/log#implies>'(Prem, Conc)
-            ->  retract(implies(Prem, Conc, Src)),
-                assertz(retwist(Prem, Conc, Src))
+            ->  retract(implies(Prem, Conc))
             ;   (   E = ':-'(Ci, Pi),
                     Pi \= true
                 ->  retract(':-'(Ci, Pi))
@@ -1774,7 +1768,7 @@ djiti_assertz(A) :-
     ).
 
 '<http://www.w3.org/2000/10/swap/log#implies>'(A, B) :-
-    implies(U, V, _),
+    implies(U, V),
     unify(U, A),
     unify(V, B),
     (   commonvars(A, B, [])
