@@ -1,0 +1,2 @@
+#!/bin/bash
+swipl -g main $(dirname "$(readlink -f "$0")")/see.pl -- "$@"

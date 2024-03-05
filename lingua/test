@@ -16,7 +16,7 @@ echo ""
 for file in *.trig
 do
     echo -en "${file} "
-    swipl -g main ../see.pl -- --skolem-genid 8b98b360-9a70-4845-b52c-c675af60ad01 --wcache https://eyereasoner.github.io/eye .. https://eyereasoner.github.io/eye/lingua/$file --output output/$file 2> /dev/null
+    swipl -g main ../see.pl -- --skolem-genid 8b98b360-9a70-4845-b52c-c675af60ad01 --wcache https://eyereasoner.github.io/eye .. https://eyereasoner.github.io/eye/lingua/$file --output output/$file
     if [[ $(git diff */$file | wc -l) -eq 0 ]]; then
         echo -e "${GREEN}OK${NORMAL}"
         ((OK++))
