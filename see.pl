@@ -19,7 +19,7 @@
 :- use_module(library(semweb/turtle)).
 :- catch(use_module(library(http/http_open)), _, true).
 
-version_info('SEE v0.0.5 (2024-03-05)').
+version_info('SEE v0.0.6 (2024-03-06)').
 
 help_info('Usage: see <options>* <data>*
 see
@@ -84,7 +84,6 @@ see
 :- dynamic('<http://www.w3.org/2000/10/swap/log#callWithCleanup>'/2).
 :- dynamic('<http://www.w3.org/2000/10/swap/log#collectAllIn>'/2).
 :- dynamic('<http://www.w3.org/2000/10/swap/log#implies>'/2).
-:- dynamic('<http://www.w3.org/2000/10/swap/log#outputString>'/2).
 
 %
 % Main goal
@@ -219,7 +218,7 @@ gre(Argus) :-
         fail
     ;   true
     ),
-    % forward rule
+    % create forward rules
     assertz(implies((
             '<http://www.w3.org/2000/10/swap/lingua#premise>'(R, A),
             '<http://www.w3.org/2000/10/swap/lingua#conclusion>'(R, B),
@@ -233,7 +232,7 @@ gre(Argus) :-
                 conj_append(E, remember(answer('<http://www.w3.org/2000/10/swap/lingua#bindings>', R, W)), F)
             ;   F = I
             )), '<http://www.w3.org/2000/10/swap/log#implies>'(Q, F), '<>')),
-    % backward rule
+    % create backward rules
     assertz(implies((
             '<http://www.w3.org/2000/10/swap/lingua#body>'(R, A),
             '<http://www.w3.org/2000/10/swap/lingua#head>'(R, B),
@@ -253,7 +252,7 @@ gre(Argus) :-
                 retractall(brake)
             ;   true
             )), true, '<>')),
-    % query
+    % create queries
     assertz(implies((
             '<http://www.w3.org/2000/10/swap/lingua#question>'(R, A),
             (   '<http://www.w3.org/2000/10/swap/lingua#answer>'(R, B)
@@ -293,10 +292,6 @@ gre(Argus) :-
     ;   nb_getval(var_ns, Sns),
         atomic_list_concat(['<', Sns, '>'], B),
         assertz(pfx('skolem:', B))
-    ),
-    (   pfx('n3:', _)
-    ->  true
-    ;   assertz(pfx('n3:', '<http://www.w3.org/2004/06/rei#>'))
     ),
     nb_setval(rn, 0),
     nb_setval(keep_ng, true),
@@ -704,15 +699,6 @@ wt0(X) :-
         write(Z)
     ).
 
-wt1(set(X)) :-
-    !,
-    write('($'),
-    wl(X),
-    write(' $)').
-wt1('$VAR'(X)) :-
-    !,
-    write('?V'),
-    write(X).
 wt1(X) :-
     X =.. [B|C],
     (   atom(B),
@@ -1098,8 +1084,8 @@ eam(Recursion) :-
         (   (   Conc = false
             ;   Conc = answer(false, void, void)
             )
-        ->  with_output_to(atom(PN3), writeq('<http://www.w3.org/2000/10/swap/log#implies>'(Prem, false))),
-            throw(inference_fuse(PN3))
+        ->  with_output_to(atom(Fuse), writeq('<http://www.w3.org/2000/10/swap/log#implies>'(Prem, false))),
+            throw(inference_fuse(Fuse))
         ;   true
         ),
         \+atom(Conc),
@@ -2915,7 +2901,6 @@ def_pfx('time:', '<http://www.w3.org/2000/10/swap/time#>').
 def_pfx('rdf:', '<http://www.w3.org/1999/02/22-rdf-syntax-ns#>').
 def_pfx('string:', '<http://www.w3.org/2000/10/swap/string#>').
 def_pfx('owl:', '<http://www.w3.org/2002/07/owl#>').
-def_pfx('n3:', '<http://www.w3.org/2004/06/rei#>').
 
 put_pfx(_, URI) :-
     atomic_list_concat(['<', URI, '>'], U),
@@ -3489,27 +3474,6 @@ relabel(A, B) :-
     relabel(D, F),
     B =.. [E|F].
 
-dynify(A) :-
-    var(A),
-    !.
-dynify(A) :-
-    atomic(A),
-    !.
-dynify([]) :-
-    !.
-dynify([A|B]) :-
-    !,
-    dynify(A),
-    dynify(B).
-dynify(A) :-
-    A =.. [B|C],
-    length(C, N),
-    (   current_predicate(B/N)
-    ->  true
-    ;   dynamic(B/N)
-    ),
-    dynify(C).
-
 conjify((A, B), (C, D)) :-
     !,
     conjify(A, C),
@@ -3517,18 +3481,6 @@ conjify((A, B), (C, D)) :-
 conjify('<http://www.w3.org/2000/10/swap/log#callWithCut>'(A, _), (A, !)) :-
     !.
 conjify(A, A).
-
-atomify(A, A) :-
-    var(A),
-    !.
-atomify([A|B], [C|D]) :-
-    !,
-    atomify(A, C),
-    atomify(B, D).
-atomify(literal(A, type('<http://www.w3.org/2001/XMLSchema#string>')), A) :-
-    atom(A),
-    !.
-atomify(A, A).
 
 commonvars(A, B, C) :-
     term_variables(A, D),
@@ -3630,11 +3582,6 @@ findvar(A, delta) :-
     (   sub_atom(A, _, 19, _, '/.well-known/genid/')
     ;   sub_atom(A, 0, _, _, some)
     ).
-findvar(A, epsilon) :-
-    !,
-    sub_atom(A, 0, 1, _, '_'),
-    \+ sub_atom(A, 0, _, _, '_bn_'),
-    \+ sub_atom(A, 0, _, _, '_e_').
 findvar(A, zeta) :-
     !,
     (   sub_atom(A, _, 19, _, '/.well-known/genid/'),
@@ -3669,8 +3616,6 @@ raw_type(literal(_, _), '<http://www.w3.org/2000/10/swap/log#Literal>') :-
 raw_type(rdiv(_, _), '<http://www.w3.org/2000/10/swap/log#Literal>') :-
     !.
 raw_type((_, _), '<http://www.w3.org/2000/10/swap/log#Formula>') :-
-    !.
-raw_type(set(_), '<http://www.w3.org/2000/10/swap/log#Set>') :-
     !.
 raw_type(A, '<http://www.w3.org/2000/10/swap/log#Formula>') :-
     functor(A, B, C),
@@ -3755,8 +3700,6 @@ getbool(true, true).
 
 getlist(A, A) :-
     var(A),
-    !.
-getlist(set(A), A) :-
     !.
 getlist([], []) :-
     !.
@@ -3976,13 +3919,16 @@ dtlit([literal(A, type('<http://www.w3.org/2001/XMLSchema#string>')), '<http://w
     !.
 dtlit([literal(A, type('<http://www.w3.org/2001/XMLSchema#string>')), B], literal(A, type(B))).
 
-memotime(datime(A, B, C, D, E, F), G) :-
-    (   mtime(datime(A, B, C, D, E, F), G)
-    ->  true
-    ;   catch(date_time_stamp(date(A, B, C, D, E, F, 0, -, -), H), _, fail),
-        fmsec(F, H, G),
-        assertz(mtime(datime(A, B, C, D, E, F), G))
-    ).
+datetime(A, B) :-
+    stamp_date_time(A, date(Year, Month, Day, Hour, Minute, Second, _, _, _), 0),
+    fmsec(A, Second, Sec),
+    ycodes(Year, C),
+    ncodes(Month, D),
+    ncodes(Day, E),
+    ncodes(Hour, F),
+    ncodes(Minute, G),
+    ncodes(Sec, H),
+    append([C, [0'-], D, [0'-], E, [0'T], F, [0':], G, [0':], H, [0'Z]], B).
 
 datetime(A, L1, L13) :-
     int(B, L1, [0'-|L3]),
@@ -3996,14 +3942,47 @@ datetime(A, L1, L13) :-
     catch(date_time_stamp(date(B, C, D, E, F, G, I, -, -), J), _, fail),
     fmsec(G, J, A).
 
-datetime(A, B, C, D, E, F, G, L1, L13) :-
-    int(A, L1, [0'-|L3]),
-    int(B, L3, [0'-|L5]),
-    int(C, L5, [0'T|L7]),
-    int(D, L7, [0':|L9]),
-    int(E, L9, [0':|L11]),
-    decimal(F, L11, L12),
-    timezone(G, L12, L13).
+datetime(Year, Month, Day, Hour, Minute, Second, Offset, B) :-
+    ycodes(Year, C),
+    ncodes(Month, D),
+    ncodes(Day, E),
+    ncodes(Hour, F),
+    ncodes(Minute, G),
+    ncodes(Second, H),
+    (   Offset =:= 0
+    ->  append([C, [0'-], D, [0'-], E, [0'T], F, [0':], G, [0':], H, [0'Z]], B)
+    ;   (   Offset > 0
+        ->  I = [0'-],
+            OHour is Offset//3600
+        ;   I = [0'+],
+            OHour is -Offset//3600
+        ),
+        ncodes(OHour, J),
+        OMinute is (Offset mod 3600)//60,
+        ncodes(OMinute, K),
+        append([C, [0'-], D, [0'-], E, [0'T], F, [0':], G, [0':], H, I, J, [0':], K], B)
+    ).
+
+date(A, B) :-
+    N is A+3600*12,
+    stamp_date_time(N, date(Year, Month, Day, _, _, _, _, _, _), 0),
+    ycodes(Year, C),
+    ncodes(Month, D),
+    ncodes(Day, E),
+    Offset is (round(floor(N)) mod 86400) - 3600*12,
+    (   Offset =:= 0
+    ->  append([C, [0'-], D, [0'-], E, [0'Z]], B)
+    ;   (   Offset > 0
+        ->  I = [0'-],
+            OHour is Offset//3600
+        ;   I = [0'+],
+            OHour is -Offset//3600
+        ),
+        ncodes(OHour, J),
+        OMinute is (Offset mod 3600)//60,
+        ncodes(OMinute, K),
+        append([C, [0'-], D, [0'-], E, I, J, [0':], K], B)
+    ).
 
 date(A, L1, L7) :-
     int(B, L1, [0'-|L3]),
@@ -4014,11 +3993,31 @@ date(A, L1, L7) :-
     catch(date_time_stamp(date(B, C, D, 0, 0, 0, I, -, -), E), _, fail),
     fmsec(0, E, A).
 
-date(A, B, C, D, L1, L7) :-
-    int(A, L1, [0'-|L3]),
-    int(B, L3, [0'-|L5]),
-    int(C, L5, L6),
-    timezone(D, L6, L7).
+date(Year, Month, Day, Offset, B) :-
+    ycodes(Year, C),
+    ncodes(Month, D),
+    ncodes(Day, E),
+    (   Offset =:= 0
+    ->  append([C, [0'-], D, [0'-], E, [0'Z]], B)
+    ;   (   Offset > 0
+        ->  I = [0'-],
+            OHour is Offset//3600
+        ;   I = [0'+],
+            OHour is -Offset//3600
+        ),
+        ncodes(OHour, J),
+        OMinute is (Offset mod 3600)//60,
+        ncodes(OMinute, K),
+        append([C, [0'-], D, [0'-], E, I, J, [0':], K], B)
+    ).
+
+time(A, B) :-
+    stamp_date_time(A, date(_, _, _, Hour, Minute, Second, _, _, _), 0),
+    fmsec(A, Second, Sec),
+    ncodes(Hour, F),
+    ncodes(Minute, G),
+    ncodes(Sec, H),
+    append([F, [0':], G, [0':], H, [0'Z]], B).
 
 time(A, L1, L7) :-
     int(B, L1, [0':|L3]),
@@ -4030,11 +4029,23 @@ time(A, L1, L7) :-
     ;   A is B*3600+C*60+D-E
     ).
 
-time(A, B, C, D, L1, L7) :-
-    int(A, L1, [0':|L3]),
-    int(B, L3, [0':|L5]),
-    decimal(C, L5, L6),
-    timezone(D, L6, L7).
+time(Hour, Minute, Second, Offset, B) :-
+    ncodes(Hour, F),
+    ncodes(Minute, G),
+    ncodes(Second, H),
+    (   Offset =:= 0
+    ->  append([F, [0':], G, [0':], H, [0'Z]], B)
+    ;   (   Offset > 0
+        ->  I = [0'-],
+            OHour is Offset//3600
+        ;   I = [0'+],
+            OHour is -Offset//3600
+        ),
+        ncodes(OHour, J),
+        OMinute is (Offset mod 3600)//60,
+        ncodes(OMinute, K),
+        append([F, [0':], G, [0':], H, I, J, [0':], K], B)
+    ).
 
 duration(A, L1, L7) :-
     dsign(B, L1, [0'P|L3]),
@@ -4049,6 +4060,24 @@ yearmonthduration(A, L1, L5) :-
     years(C, L3, L4),
     months(D, L4, L5),
     A is B*(C*12+D).
+
+daytimeduration(A, B) :-
+    AInt is round(floor(A)),
+    AFrac is A-AInt,
+    (   AInt < 0
+    ->  C = [0'-]
+    ;   C = []
+    ),
+    D is abs(AInt),
+    E is D//86400,
+    number_codes(E, Days),
+    F is (D-(D//86400)*86400)//3600,
+    number_codes(F, Hours),
+    G is (D-(D//3600)*3600)//60,
+    number_codes(G, Minutes),
+    H is D-(D//60)*60+AFrac,
+    number_codes(H, Seconds),
+    append([C, [0'P| Days], [0'D, 0'T| Hours], [0'H| Minutes], [0'M| Seconds], [0'S]], B).
 
 daytimeduration(A, L1, L5) :-
     dsign(B, L1, [0'P|L3]),
@@ -4139,133 +4168,6 @@ fmsec(A, B, C) :-
     C is floor(B).
 fmsec(_, B, B).
 
-datetime(A, B) :-
-    stamp_date_time(A, date(Year, Month, Day, Hour, Minute, Second, _, _, _), 0),
-    fmsec(A, Second, Sec),
-    ycodes(Year, C),
-    ncodes(Month, D),
-    ncodes(Day, E),
-    ncodes(Hour, F),
-    ncodes(Minute, G),
-    ncodes(Sec, H),
-    append([C, [0'-], D, [0'-], E, [0'T], F, [0':], G, [0':], H, [0'Z]], B).
-
-datetime(Year, Month, Day, Hour, Minute, Second, Offset, B) :-
-    ycodes(Year, C),
-    ncodes(Month, D),
-    ncodes(Day, E),
-    ncodes(Hour, F),
-    ncodes(Minute, G),
-    ncodes(Second, H),
-    (   Offset =:= 0
-    ->  append([C, [0'-], D, [0'-], E, [0'T], F, [0':], G, [0':], H, [0'Z]], B)
-    ;   (   Offset > 0
-        ->  I = [0'-],
-            OHour is Offset//3600
-        ;   I = [0'+],
-            OHour is -Offset//3600
-        ),
-        ncodes(OHour, J),
-        OMinute is (Offset mod 3600)//60,
-        ncodes(OMinute, K),
-        append([C, [0'-], D, [0'-], E, [0'T], F, [0':], G, [0':], H, I, J, [0':], K], B)
-    ).
-
-date(A, B) :-
-    N is A+3600*12,
-    stamp_date_time(N, date(Year, Month, Day, _, _, _, _, _, _), 0),
-    ycodes(Year, C),
-    ncodes(Month, D),
-    ncodes(Day, E),
-    Offset is (round(floor(N)) mod 86400) - 3600*12,
-    (   Offset =:= 0
-    ->  append([C, [0'-], D, [0'-], E, [0'Z]], B)
-    ;   (   Offset > 0
-        ->  I = [0'-],
-            OHour is Offset//3600
-        ;   I = [0'+],
-            OHour is -Offset//3600
-        ),
-        ncodes(OHour, J),
-        OMinute is (Offset mod 3600)//60,
-        ncodes(OMinute, K),
-        append([C, [0'-], D, [0'-], E, I, J, [0':], K], B)
-    ).
-
-date(Year, Month, Day, Offset, B) :-
-    ycodes(Year, C),
-    ncodes(Month, D),
-    ncodes(Day, E),
-    (   Offset =:= 0
-    ->  append([C, [0'-], D, [0'-], E, [0'Z]], B)
-    ;   (   Offset > 0
-        ->  I = [0'-],
-            OHour is Offset//3600
-        ;   I = [0'+],
-            OHour is -Offset//3600
-        ),
-        ncodes(OHour, J),
-        OMinute is (Offset mod 3600)//60,
-        ncodes(OMinute, K),
-        append([C, [0'-], D, [0'-], E, I, J, [0':], K], B)
-    ).
-
-time(A, B) :-
-    stamp_date_time(A, date(_, _, _, Hour, Minute, Second, _, _, _), 0),
-    fmsec(A, Second, Sec),
-    ncodes(Hour, F),
-    ncodes(Minute, G),
-    ncodes(Sec, H),
-    append([F, [0':], G, [0':], H, [0'Z]], B).
-
-time(Hour, Minute, Second, Offset, B) :-
-    ncodes(Hour, F),
-    ncodes(Minute, G),
-    ncodes(Second, H),
-    (   Offset =:= 0
-    ->  append([F, [0':], G, [0':], H, [0'Z]], B)
-    ;   (   Offset > 0
-        ->  I = [0'-],
-            OHour is Offset//3600
-        ;   I = [0'+],
-            OHour is -Offset//3600
-        ),
-        ncodes(OHour, J),
-        OMinute is (Offset mod 3600)//60,
-        ncodes(OMinute, K),
-        append([F, [0':], G, [0':], H, I, J, [0':], K], B)
-    ).
-
-yearmonthduration(A, B) :-
-    (   A < 0
-    ->  C = [0'-]
-    ;   C = []
-    ),
-    D is abs(A),
-    E is D//12,
-    number_codes(E, Years),
-    F is D-(D//12)*12,
-    number_codes(F, Months),
-    append([C, [0'P], Years, [0'Y], Months, [0'M]], B).
-
-daytimeduration(A, B) :-
-    AInt is round(floor(A)),
-    AFrac is A-AInt,
-    (   AInt < 0
-    ->  C = [0'-]
-    ;   C = []
-    ),
-    D is abs(AInt),
-    E is D//86400,
-    number_codes(E, Days),
-    F is (D-(D//86400)*86400)//3600,
-    number_codes(F, Hours),
-    G is (D-(D//3600)*3600)//60,
-    number_codes(G, Minutes),
-    H is D-(D//60)*60+AFrac,
-    number_codes(H, Seconds),
-    append([C, [0'P| Days], [0'D, 0'T| Hours], [0'H| Minutes], [0'M| Seconds], [0'S]], B).
-
 ncodes(A, B) :-
     number_codes(A, D),
     (   A < 10
@@ -4303,79 +4205,6 @@ absolute_uri(A, B) :-
         atom_codes(G, F),
         atomic_list_concat(['file://', G], B)
     ).
-
-resolve_uri(A, _, A) :-
-    sub_atom(A, _, 1, _, ':'),
-    !.
-resolve_uri('', A, A) :-
-    !.
-resolve_uri('#', A, B) :-
-    !,
-    atomic_list_concat([A, '#'], B).
-resolve_uri(A, B, A) :-
-    \+sub_atom(B, _, 1, _, ':'),
-    !.
-resolve_uri(A, B, C) :-
-    so_uri(U),
-    atom_length(U, V),
-    sub_atom(A, 0, 1, _, '#'),
-    sub_atom(B, 0, V, _, U),
-    !,
-    atomic_list_concat([B, A], C).
-resolve_uri(A, B, C) :-
-    sub_atom(A, 0, 2, _, './'),
-    !,
-    sub_atom(A, 2, _, 0, R),
-    resolve_uri(R, B, C).
-resolve_uri(A, B, C) :-
-    sub_atom(A, 0, 3, _, '../'),
-    !,
-    sub_atom(A, 3, _, 0, R),
-    so_uri(U),
-    atom_length(U, V),
-    sub_atom(B, 0, V, D, U),
-    sub_atom(B, V, D, _, E),
-    (   sub_atom(E, F, 1, G, '/'),
-        sub_atom(E, _, G, 0, H),
-        \+sub_atom(H, _, _, _, '/'),
-        K is V+F
-    ->  sub_atom(B, 0, K, _, S)
-    ;   S = B
-    ),
-    resolve_uri(R, S, C).
-resolve_uri(A, B, C) :-
-    so_uri(U),
-    atom_length(U, V),
-    sub_atom(A, 0, 1, _, '/'),
-    sub_atom(B, 0, V, D, U),
-    sub_atom(B, V, D, _, E),
-    (   sub_atom(E, F, 1, _, '/')
-    ->  sub_atom(E, 0, F, _, G)
-    ;   G = E
-    ),
-    !,
-    atomic_list_concat([U, G, A], C).
-resolve_uri(A, B, C) :-
-    so_uri(U),
-    atom_length(U, V),
-    sub_atom(B, 0, V, D, U),
-    sub_atom(B, V, D, _, E),
-    (   sub_atom(E, F, 1, G, '/'),
-        sub_atom(E, _, G, 0, H),
-        \+sub_atom(H, _, _, _, '/')
-    ->  sub_atom(E, 0, F, _, I)
-    ;   I = E
-    ),
-    !,
-    atomic_list_concat([U, I, '/', A], C).
-resolve_uri(A, _, _) :-
-    nb_getval(line_number, Ln),
-    throw(unresolvable_relative_uri(A, after_line(Ln))).
-
-so_uri('http://').
-so_uri('https://').
-so_uri('ftp://').
-so_uri('file://').
 
 wcacher(A, B) :-
     wcache(A, B),
