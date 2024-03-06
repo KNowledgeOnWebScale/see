@@ -19,7 +19,7 @@
 :- use_module(library(semweb/turtle)).
 :- catch(use_module(library(http/http_open)), _, true).
 
-version_info('SEE v0.0.7 (2024-03-06)').
+version_info('SEE v0.0.8 (2024-03-07)').
 
 help_info('Usage: see <options>* <data>*
 see
@@ -451,37 +451,9 @@ trig_term(node(A), B) :-
 trig_term(A, B) :-
     atomic_list_concat(['<', A, '>'], B).
 
-rename('\'<http://www.w3.org/1999/02/22-rdf-syntax-ns#nil>\'', []) :-
-    !.
-rename('\'<http://www.w3.org/2000/10/swap/log#isImpliedBy>\'', ':-') :-
-    !.
-rename(A, A).
-
 %
 % Reasoning output
 %
-
-w0([]) :-
-    !.
-w0([A|B]) :-
-    (   \+sub_atom(A, 1, _, _, '"'),
-        sub_atom(A, _, 1, _, ' '),
-        \+sub_atom(A, _, _, 1, '"')
-    ->  format(' "~w"', [A])
-    ;   format(' ~w', [A])
-    ),
-    w0(B).
-
-w1([]) :-
-    !.
-w1([A|B]) :-
-    (   \+sub_atom(A, 1, _, _, '"'),
-        sub_atom(A, _, 1, _, ' '),
-        \+sub_atom(A, _, _, 1, '"')
-    ->  format(' "~w"', [A])
-    ;   format(' ~w', [A])
-    ),
-    w1(B).
 
 wh :-
     (   keep_skolem(_)
@@ -551,7 +523,7 @@ w3 :-
 wt(X) :-
     var(X),
     !,
-    write('?'),
+    write('var:'),
     write(X).
 wt(X) :-
     functor(X, _, A),
@@ -595,7 +567,7 @@ wt0(X) :-
             )
         ;   memberchk(X, L)
         )
-    ->  write('?U_')
+    ->  write('var:U_')
     ;   write('_:sk_')
     ),
     write(Y).
@@ -635,7 +607,7 @@ wt0(X) :-
             ->  write('_:')
             ;   sub_atom(Y, 0, 2, _, Z),
                 memberchk(Z, ['x_', 't_']),
-                write('?')
+                write('var:')
             )
         ;   write('_:')
         ),
@@ -968,7 +940,7 @@ wtn(X) :-
 wg(X) :-
     var(X),
     !,
-    write('?'),
+    write('var:'),
     write(X).
 wg(X) :-
     functor(X, F, A),
@@ -2945,12 +2917,6 @@ within_scope([A, B]) :-
     ),
     nb_getval(scope, A).
 
-exo_pred(exopred(P, S, O), A) :-
-    atomic(P),
-    !,
-    A =.. [P, S, O].
-exo_pred(A, A).
-
 exopred(P, S, O) :-
     (   var(P),
         var(S),
@@ -4273,4 +4239,3 @@ mf(A) :-
         )
     ),
     flush_output(user_error).
-
