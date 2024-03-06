@@ -1,5 +1,5 @@
 # Second Eye of Euler - SEE
 
-Reasoning engine that talks TriG
+Reasoning engine that is talking RDF 1.X as the web lingua.
 
-Examples are in [lingua](./lingua) and their proofs in [lingua/output](./lingua/output).
+Examples are in [lingua](./lingua) and their proofs in [lingua/proof](./lingua/proof).
