@@ -59,6 +59,9 @@ export DATE="$(date -Idate)"
 cat see.pl | sed -e "s/'SEE.*'/'SEE $RELEASE \($DATE\)'/" > see.pl.tmp
 mv see.pl.tmp see.pl
 
+# create image
+swipl -f see.pl -g "qsave_program('see.pvm', [goal(main)]),halt"
+
 # run the tests
 ./test
 

@@ -1,2 +1,2 @@
 #!/bin/bash
-swipl -g main $(dirname "$(readlink -f "$0")")/see.pl -- "$@"
+swipl -x $(dirname "$(readlink -f "$0")")/see.pvm -- "$@"
