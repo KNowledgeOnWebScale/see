@@ -62,6 +62,9 @@ mv see.pl.tmp see.pl
 # create image
 swipl -f see.pl -g "qsave_program('see.pvm', [goal(main)]),halt"
 
+# link see command
+sudo ln -sf $(realpath ./see) /usr/local/bin
+
 # run the tests
 ./test
 
