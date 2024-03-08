@@ -13,13 +13,14 @@ echo -e "${YELLOW}Running lingua/test${NORMAL}"
 echo -e "${YELLOW}-------------------${NORMAL}"
 echo ""
 
+begin=$(($(date +%s)))
 for file in *.trig
 do
     echo -en "${file} ... "
     start=$(($(date +%s%N)/1000000))
     see --genid 8b98b360-9a70-4845-b52c-c675af60ad01 --wcache https://eyereasoner.github.io/see .. https://eyereasoner.github.io/see/lingua/$file --output output/$file
     end=$(($(date +%s%N)/1000000))
-    echo -en "`expr $end - $start` msec "
+    echo -en "${YELLOW}`expr $end - $start` msec${NORMAL} "
     if [[ $(git diff */$file | wc -l) -eq 0 ]]; then
         echo -e "${GREEN}OK${NORMAL}"
         ((OK++))
@@ -28,9 +29,10 @@ do
         ((FAILED++))
     fi
 done
+end=$(($(date +%s)))
 echo ""
 
-echo -e "${YELLOW}Tests:${NORMAL} ${GREEN}${OK} OK${NORMAL} ${RED}${FAILED} FAILED${NORMAL}"
+echo -e "lingua tests: ${YELLOW}`expr $end - $begin` sec${NORMAL} ${GREEN}${OK} OK${NORMAL} ${RED}${FAILED} FAILED${NORMAL}"
 if [[ ${FAILED} -eq 0 ]]; then
     exit 0
 else
