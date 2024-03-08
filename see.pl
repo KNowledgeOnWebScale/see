@@ -19,7 +19,7 @@
 :- use_module(library(semweb/turtle)).
 :- catch(use_module(library(http/http_open)), _, true).
 
-version_info('SEE v0.0.8 (2024-03-07)').
+version_info('SEE v0.0.9 (2024-03-08)').
 
 help_info('Usage: see <options>* <data>*
 see
@@ -192,6 +192,7 @@ gre(Argus) :-
         fail
     ;   true
     ),
+    % move rdf lists
     (   graph(A, B),
         conj_list(B, C),
         relist(C, D),
@@ -217,6 +218,9 @@ gre(Argus) :-
         fail
     ;   true
     ),
+    % remove rdf lists
+    retractall('<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>'(_, _)),
+    retractall('<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>'(_, _)),
     % create forward rules
     assertz(implies((
             '<http://www.w3.org/2000/10/swap/lingua#premise>'(R, A),
@@ -275,25 +279,16 @@ gre(Argus) :-
                 retractall(brake)
             ;   true
             )), true)),
-    % set scope
+    % set engine values
     findall(Sc,
         (   scope(Sc)
         ),
         Scope
     ),
     nb_setval(scope, Scope),
-    (   pfx('var:', _)
-    ->  true
-    ;   assertz(pfx('var:', '<http://www.w3.org/2000/10/swap/var#>'))
-    ),
-    (   pfx('skolem:', _)
-    ->  true
-    ;   nb_getval(var_ns, Sns),
-        atomic_list_concat(['<', Sns, '>'], B),
-        assertz(pfx('skolem:', B))
-    ),
     nb_setval(rn, 0),
     nb_setval(keep_ng, true),
+    % run engine
     catch(eam(0), Exc3,
         (   (   Exc3 = halt(0)
             ->  true
@@ -850,15 +845,6 @@ wt2(':-'(X, Y)) :-
     ;   true
     ),
     !.
-wt2(quad(triple(S, P, O), G)) :-
-    !,
-    wg(S),
-    write(' '),
-    wt0(P),
-    write(' '),
-    wg(O),
-    write(' '),
-    wg(G).
 wt2(graph(X, Y)) :-
     !,
     wp(X),
@@ -915,15 +901,6 @@ wtn(exopred(P, S, O)) :-
         write(' '),
         wg(O)
     ).
-wtn(triple(S, P, O)) :-
-    !,
-    write('<< '),
-    wg(S),
-    write(' '),
-    wp(P),
-    write(' '),
-    wg(O),
-    write(' >>').
 wtn(X) :-
     X =.. [B|C],
     (   atom(B),
@@ -2858,26 +2835,10 @@ djiti_assertz(A) :-
 % Support
 %
 
-def_pfx('math:', '<http://www.w3.org/2000/10/swap/math#>').
-def_pfx('list:', '<http://www.w3.org/2000/10/swap/list#>').
-def_pfx('xsd:', '<http://www.w3.org/2001/XMLSchema#>').
-def_pfx('log:', '<http://www.w3.org/2000/10/swap/log#>').
-def_pfx('rdfs:', '<http://www.w3.org/2000/01/rdf-schema#>').
-def_pfx('time:', '<http://www.w3.org/2000/10/swap/time#>').
-def_pfx('rdf:', '<http://www.w3.org/1999/02/22-rdf-syntax-ns#>').
-def_pfx('string:', '<http://www.w3.org/2000/10/swap/string#>').
-def_pfx('owl:', '<http://www.w3.org/2002/07/owl#>').
-
 put_pfx(_, URI) :-
     atomic_list_concat(['<', URI, '>'], U),
     pfx(_, U),
     !.
-put_pfx(_, URI) :-
-    atomic_list_concat(['<', URI, '>'], U),
-    def_pfx(Pf, U),
-    \+pfx(Pf, _),
-    !,
-    assertz(pfx(Pf, U)).
 put_pfx(Pf, URI) :-
     atomic_list_concat(['<', URI, '>'], U),
     fresh_pf(Pf, Pff),
