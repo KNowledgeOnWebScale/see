@@ -53,5 +53,5 @@ _:pi_rule3_body {
 :pi_query lingua:question _:pi_question.
 
 _:pi_question {
-    (2000 var:Pi) :pi true.
+    (1000 var:Pi) :pi true.
 }
