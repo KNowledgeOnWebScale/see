@@ -19,7 +19,7 @@
 :- use_module(library(semweb/turtle)).
 :- catch(use_module(library(http/http_open)), _, true).
 
-version_info('SEE v0.0.9 (2024-03-08)').
+version_info('SEE v0.0.10 (2024-03-11)').
 
 help_info('Usage: see <options>* <data>*
 see
