@@ -19,16 +19,17 @@
     lingua:answer _:filter_answer.
 
 _:filter_question {
-    :Let :where var:where.
-    (var:param var:where var:filteredParams) log:collectAllIn var:scope.    ## DOES NOT WORK ##
+    :Let :where (var:param var:where).
+    (var:param var:where) log:new (var:newParam var:newWhere).
+    (var:newParam var:newWhere var:filteredParams) log:collectAllIn var:scope.
     var:filteredParams list:length 2.
 }
 
 _:filter_answer {
-    :test :is true.
+    :result :is var:filteredParams.
 }
 
-:Let :where _:filter_where.
+:Let :where (var:param _:filter_where).
 
 _:filter_where {
     :Let :param var:param.
